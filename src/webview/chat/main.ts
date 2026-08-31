@@ -451,26 +451,29 @@ function closeAllPopoversExcept(except?: HTMLElement): void {
     if (p !== except) p.classList.add('hidden');
   });
 }
-
-btnRole.onclick = () => {
+btnRole.onclick = (e) => {
+  e.stopPropagation();
   const isHidden = popoverRole.classList.contains('hidden');
   closeAllPopoversExcept();
   if (isHidden) popoverRole.classList.remove('hidden');
 };
 
-btnMode.onclick = () => {
+btnMode.onclick = (e) => {
+  e.stopPropagation();
   const isHidden = popoverMode.classList.contains('hidden');
   closeAllPopoversExcept();
   if (isHidden) popoverMode.classList.remove('hidden');
 };
 
-btnThink.onclick = () => {
+btnThink.onclick = (e) => {
+  e.stopPropagation();
   const isHidden = popoverThink.classList.contains('hidden');
   closeAllPopoversExcept();
   if (isHidden) popoverThink.classList.remove('hidden');
 };
 
-btnSlash.onclick = () => {
+btnSlash.onclick = (e) => {
+  e.stopPropagation();
   const isHidden = popoverSlash.classList.contains('hidden');
   closeAllPopoversExcept();
   if (isHidden) {
@@ -480,6 +483,22 @@ btnSlash.onclick = () => {
   }
 };
 
+// Global Click-Away & Escape Listeners
+document.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement | null;
+  if (!target) return;
+  const inside = target.closest('.popover') || target.closest('.pill-selector') || target.closest('.action-btn');
+  if (!inside) {
+    closeAllPopoversExcept();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeAllPopoversExcept();
+    historyDrawer.classList.add('hidden');
+  }
+});
 // Render Slash Commands List with Search
 function renderSlashCommandsList(filterText = ''): void {
   const slashListEl = document.getElementById('slash-list')!;
