@@ -38,4 +38,5 @@ export type WebviewMessage =
   | { type: 'exit'; sessionId: string; code: number | null }
   | { type: 'closed'; sessionId: string }
   | { type: 'config' } & ConfigPayload
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'key'; chord: string };
