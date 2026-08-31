@@ -1,0 +1,152 @@
+{
+  "name": "oh-my-pi-vscode",
+  "displayName": "Oh My Pi",
+  "description": "Run omp (Oh My Pi) TUI sessions in the VS Code sidebar",
+  "version": "0.1.0",
+  "publisher": "omp-dev",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "vscode": "^1.94.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "omp-sidebar",
+          "title": "Oh My Pi",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "omp-sidebar": [
+        {
+          "type": "webview",
+          "id": "omp.sidebarTerminal",
+          "name": "Sessions"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "omp-vscode.newSession",
+        "title": "OMP: New Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "omp-vscode.openInEditor",
+        "title": "OMP: Open in Editor Tab",
+        "icon": "media/icon.svg"
+      },
+      {
+        "command": "omp-vscode.focus",
+        "title": "OMP: Focus Sidebar"
+      },
+      {
+        "command": "omp-vscode.forwardKey",
+        "title": "OMP: Forward Key (internal)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "omp-vscode.newSession",
+          "group": "navigation",
+          "when": "view == omp.sidebarTerminal"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "omp-vscode.openInEditor",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "omp-vscode.focus",
+        "key": "ctrl+alt+o",
+        "mac": "cmd+alt+o"
+      },
+      {
+        "command": "omp-vscode.openInEditor",
+        "key": "ctrl+alt+shift+o",
+        "mac": "cmd+alt+shift+o"
+      },
+      {
+        "command": "omp-vscode.forwardKey",
+        "args": [
+          "ctrl+p"
+        ],
+        "key": "ctrl+p",
+        "when": "ompSidebarFocused"
+      }
+    ],
+    "configuration": {
+      "title": "Oh My Pi",
+      "properties": {
+        "omp.executablePath": {
+          "type": "string",
+          "default": "omp",
+          "description": "Path to the omp executable. Leave 'omp' to use PATH; %LOCALAPPDATA%\\omp\\omp.exe is auto-detected on Windows."
+        },
+        "omp.defaultArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra CLI args for every new omp session, e.g. [\"--thinking\",\"high\"]"
+        },
+        "omp.fontFamily": {
+          "type": "string",
+          "default": "",
+          "description": "Terminal font family. Empty = follow terminal.integrated.fontFamily, then editor font."
+        },
+        "omp.scrollback": {
+          "type": "number",
+          "default": 5000,
+          "description": "xterm.js scrollback lines per session"
+        },
+        "omp.passThroughKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "ctrl+p"
+          ],
+          "description": "Keys forwarded to the omp terminal when the sidebar is focused. Only pre-declared chords (currently 'ctrl+p') take effect; others fall back to VS Code defaults."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "tsx --test test/unit/*.test.ts",
+    "test:integration": "vscode-test"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.94.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^3.1.0",
+    "esbuild": "^0.24.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

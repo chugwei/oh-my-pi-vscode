@@ -81,8 +81,8 @@
       ]
     },
     "keybindings": [
-      { "command": "omp-vscode.focus", "key": "ctrl+escape", "mac": "cmd+escape" },
-      { "command": "omp-vscode.openInEditor", "key": "ctrl+shift+escape", "mac": "cmd+shift+escape" },
+      { "command": "omp-vscode.focus", "key": "ctrl+alt+o", "mac": "cmd+alt+o" },
+      { "command": "omp-vscode.openInEditor", "key": "ctrl+alt+shift+o", "mac": "cmd+alt+shift+o" },
       {
         "command": "omp-vscode.forwardKey",
         "args": ["ctrl+p"],
@@ -412,6 +412,11 @@ test('settings override that does not exist throws', () => {
   assert.throws(() => resolveOmpExecutable('D:\\missing.exe', deps([])), /executablePath/);
 });
 
+test('default sentinel "omp" falls through to autodetect/PATH', () => {
+  const p = resolveOmpExecutable('omp', deps([]));
+  assert.equal(p, 'omp');
+});
+
 test('falls back to %LOCALAPPDATA% detection on win32', () => {
   const p = resolveOmpExecutable(undefined, deps(['C:\\Users\\x\\AppData\\Local\\omp\\omp.exe']));
   assert.equal(p, 'C:\\Users\\x\\AppData\\Local\\omp\\omp.exe');
@@ -449,12 +454,13 @@ export interface ExecutableDeps {
  * -> bare "omp" (delegated to PATH at spawn time; a PATH miss surfaces as spawn error).
  */
 export function resolveOmpExecutable(configured: string | undefined, deps: ExecutableDeps): string {
-  if (configured && configured.trim()) {
-    if (deps.existsSync(configured)) {
-      return configured;
+  const configuredPath = configured?.trim();
+  if (configuredPath && configuredPath !== 'omp') {
+    if (deps.existsSync(configuredPath)) {
+      return configuredPath;
     }
     throw new Error(
-      `omp.executablePath points to a file that does not exist: ${configured}`,
+      `omp.executablePath points to a file that does not exist: ${configuredPath}`,
     );
   }
   if (deps.platform === 'win32' && deps.env.LOCALAPPDATA) {
@@ -517,6 +523,13 @@ test('size reports byte length', () => {
   r.push('hello');
   assert.equal(r.size(), 5);
 });
+
+test('empty push does not evict retained data', () => {
+  const r = new RingBuffer(3);
+  r.push('0123456789');
+  r.push('');
+  assert.equal(r.data(), '0123456789');
+});
 ```
 
 - [ ] **Step 2: 运行确认失败**
@@ -535,6 +548,7 @@ export class RingBuffer {
   constructor(private readonly maxBytes: number) {}
 
   push(s: string): void {
+    if (!s) return;
     this.chunks.push(s);
     this.total += s.length;
     while (this.total > this.maxBytes && this.chunks.length > 1) {
@@ -1045,7 +1059,7 @@ export class OmpViewProvider implements vscode.WebviewViewProvider {
   }
 
   reveal(): void {
-    this.view?.show?.(true);
+    void vscode.commands.executeCommand(`${OmpViewProvider.viewId}.focus`);
   }
 
   private onMessage(m: HostMessage): void {
@@ -1139,7 +1153,8 @@ export function openOmpInEditor(ctx: vscode.ExtensionContext, executable: string
     },
   });
   term.show();
-  term.sendText([executable, ...args].join(' '), true);
+  const quoted = /\s/.test(executable) ? `"${executable}"` : executable;
+  term.sendText([quoted, ...args].join(' '), true);
   return term;
 }
 ```
@@ -1329,9 +1344,13 @@ declare function acquireVsCodeApi(): {
 
 const vscode = acquireVsCodeApi();
 
-const CHORD_BYTES: Record<string, string> = {
-  'ctrl+p': '\x10',
-};
+function chordToBytes(chord: string): string | null {
+  const m = /^ctrl\+([a-z])$/i.exec(chord);
+  if (!m) {
+    return null;
+  }
+  return String.fromCharCode(m[1].toUpperCase().charCodeAt(0) - 64);
+}
 
 interface Tab {
   info: SessionInfo;
@@ -1415,12 +1434,26 @@ function renderTabs(): void {
   for (const t of tabs.values()) {
     const b = document.createElement('button');
     b.className = 'tab' + (t.info.id === activeId ? ' active' : '');
-    b.textContent = label(t.info);
     b.title = t.info.exited ? 'Restart' : 'Switch';
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'tab-label';
+    labelSpan.textContent = label(t.info);
+    b.appendChild(labelSpan);
+    const x = document.createElement('span');
+    x.className = 'tab-close';
+    x.textContent = '×';
+    x.title = 'Close session';
+    x.onclick = (ev) => {
+      ev.stopPropagation();
+      post({ type: 'close', sessionId: t.info.id });
+    };
+    b.appendChild(x);
     b.onclick = () => {
       if (t.info.exited) {
         post({ type: 'restart', sessionId: t.info.id });
       } else {
+        activeId = t.info.id;
+        renderTabs();
         post({ type: 'switch', sessionId: t.info.id });
       }
     };
@@ -1500,7 +1533,7 @@ window.addEventListener('message', (e: MessageEvent<WebviewMessage>) => {
       break;
     case 'key': {
       // host forwarded a stolen chord back into the terminal
-      const bytes = CHORD_BYTES[m.chord];
+      const bytes = chordToBytes(m.chord);
       if (bytes && activeId) {
         post({ type: 'input', sessionId: activeId, data: bytes });
       }
@@ -1555,7 +1588,10 @@ style.textContent = `
   body { color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); }
   #app { display: flex; flex-direction: column; }
   .tabbar { display: flex; gap: 2px; padding: 2px 4px; align-items: center; flex-wrap: wrap; }
-  .tabbar .tab { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab { display: inline-flex; align-items: center; gap: 4px; }
+  .tab-label { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab-close { padding: 0 2px; opacity: 0.7; }
+  .tab-close:hover { opacity: 1; color: var(--vscode-errorForeground); }
   .tab.active { border-bottom: 1px solid var(--vscode-focusBorder); }
   button { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; padding: 2px 8px; cursor: pointer; font-size: 11px; }
   button:hover { filter: brightness(1.15); }
@@ -1703,9 +1739,9 @@ Expected: 新 VS Code 窗口，活动栏出现 π 图标（Oh My Pi）。
 3. Ctrl+P 在面板聚焦时打开 omp 模型切换（而非 VS Code 快速打开）
 4. 再开第二个会话 → 标签切换正常，两会话进程独立
 5. `↺` → 出现 `omp (resume)` 标签，`-r` 选择器可用
-6. 关闭一个标签 → 仅该进程终止；`Ctrl+Escape` 回焦侧边栏
+6. 关闭一个标签 → 仅该进程终止；`Ctrl+Alt+O` 回焦侧边栏
 7. 折叠侧边栏再展开 → 会话仍在、缓冲未丢
-8. `Ctrl+Shift+Escape` → 编辑器区出现 omp 大窗终端
+8. `Ctrl+Alt+Shift+O` → 编辑器区出现 omp 大窗终端
 9. 退出会话进程（`/exit`）→ 标签显示 `[exited]`，点击标签 → 重启
 
 发现缺陷：修复后从 Step 2 重跑相关项。
