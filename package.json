@@ -2,7 +2,7 @@
   "name": "oh-my-pi-vscode",
   "displayName": "Oh My Pi",
   "description": "Run omp (Oh My Pi) TUI sessions in the VS Code sidebar",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "publisher": "omp-dev",
   "license": "MIT",
   "type": "commonjs",

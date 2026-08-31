@@ -24,20 +24,20 @@ let thoughtTextBuf = '';
 let serverCommands: Array<{ name: string; description: string }> = [];
 
 const BUILTIN_SLASH_COMMANDS: Array<{ cmd: string; desc: string }> = [
-  { cmd: '/clear', desc: '清空当前会话消息与上下文' },
-  { cmd: '/plan', desc: '切换至 Plan 架构规划模式' },
-  { cmd: '/default', desc: '切换至 Default 正常编程模式' },
-  { cmd: '/compact', desc: '压缩当前会话上下文 (节省 Token)' },
-  { cmd: '/model', desc: '打开模型与角色切换面板' },
-  { cmd: '/think', desc: '调整思考与推理强度 (Off/Auto/High/Max)' },
-  { cmd: '/security', desc: '执行 OMP 项目安全审计与漏洞扫描' },
-  { cmd: '/init', desc: '初始化项目配置与上下文规则' },
-  { cmd: '/git', desc: '打开交互式 Git 版本管理' },
-  { cmd: '/commit', desc: '智能分析差异并生成 Git 提交信息' },
-  { cmd: '/export', desc: '导出当前会话为 HTML / Markdown' },
-  { cmd: '/share', desc: '生成加密的会话在线分享链接' },
-  { cmd: '/cost', desc: '查看当前会话 Token 消耗与成本统计' },
-  { cmd: '/help', desc: '查看完整帮助指南与快捷键列表' },
+  { cmd: '/clear', desc: 'Clear chat history and context' },
+  { cmd: '/plan', desc: 'Switch to Plan architectural mode' },
+  { cmd: '/default', desc: 'Switch to Default coding mode' },
+  { cmd: '/compact', desc: 'Compact session context to save tokens' },
+  { cmd: '/model', desc: 'Open role and model selector' },
+  { cmd: '/think', desc: 'Adjust thinking intensity (Off/Auto/High/Max)' },
+  { cmd: '/security', desc: 'Run project security audit and scan' },
+  { cmd: '/init', desc: 'Initialize project context and rules' },
+  { cmd: '/git', desc: 'Open interactive Git version control' },
+  { cmd: '/commit', desc: 'Generate smart Git commit message' },
+  { cmd: '/export', desc: 'Export session as HTML / Markdown' },
+  { cmd: '/share', desc: 'Create encrypted session share link' },
+  { cmd: '/cost', desc: 'View token usage and cost statistics' },
+  { cmd: '/help', desc: 'View help guide and keyboard shortcuts' },
 ];
 
 const app = document.getElementById('app')!;
@@ -46,25 +46,28 @@ function post(msg: ChatHostMessage): void {
   vscode.postMessage(msg);
 }
 
-// Render Main App Skeleton (Claude Code High-End Aesthetics)
+// Render Main App Skeleton (Clean English & Crisp Vector Icons)
 app.innerHTML = `
   <div class="chat-container">
     <!-- Top Header -->
     <div class="chat-header">
       <div class="header-left">
-        <button id="btn-history" class="header-btn" title="历史会话">≡ 历史</button>
-        <button id="btn-new" class="header-btn" title="开启新会话">＋ 新建</button>
+        <button id="btn-history" class="header-btn" title="History sessions">History</button>
+        <button id="btn-new" class="header-btn" title="Start new session">New</button>
       </div>
       <div class="header-right">
-        <span id="badge-cwd" class="badge-cwd" title="当前工作目录">📁 --</span>
-        <span id="badge-role" class="badge-role">🎯 Default</span>
+        <span id="badge-cwd" class="badge-cwd" title="Working directory">
+          <svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span id="badge-cwd-name">--</span>
+        </span>
+        <span id="badge-role" class="badge-role">Default</span>
       </div>
     </div>
 
     <!-- History Drawer (hidden by default) -->
     <div id="history-drawer" class="drawer hidden">
       <div class="drawer-header">
-        <span>📜 历史会话</span>
+        <span>History</span>
         <button id="btn-close-history" class="header-btn">✕</button>
       </div>
       <div id="history-list" class="history-list"></div>
@@ -81,11 +84,11 @@ app.innerHTML = `
         <h2>Oh My Pi</h2>
         <p class="welcome-subtitle">Your AI coding partner in VS Code</p>
         <div class="welcome-cwd-pill" id="welcome-cwd-box">
-          <span class="cwd-icon">📁</span>
+          <svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           <span id="welcome-cwd-text">--</span>
         </div>
         <div class="welcome-roles-quick">
-          <span class="quick-title">选择角色开始：</span>
+          <span class="quick-title">Choose a role to start:</span>
           <div id="welcome-roles-list" class="roles-chips"></div>
         </div>
       </div>
@@ -104,10 +107,10 @@ app.innerHTML = `
         <div class="claude-toolbar">
           <!-- Left side vector icons: + and [/] -->
           <div class="left-actions">
-            <button id="btn-attach" class="action-btn" title="添加文件或图片">
+            <button id="btn-attach" class="action-btn" title="Add file or image">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
             </button>
-            <button id="btn-slash" class="action-btn slash-btn" title="快捷斜杠命令 (/)">
+            <button id="btn-slash" class="action-btn slash-btn" title="Slash commands (/)">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8.5 17L15.5 7"/></svg>
             </button>
           </div>
@@ -115,37 +118,37 @@ app.innerHTML = `
           <!-- Right side selectors: Role/Model, Mode, Think, and Send ↑ -->
           <div class="right-actions">
             <div class="popover-wrapper">
-              <button id="btn-role" class="pill-selector" title="选择角色与模型">🎯 Role: Default▾</button>
+              <button id="btn-role" class="pill-selector" title="Select role and model">Role: Default▾</button>
               <div id="popover-role" class="popover role-popover hidden">
-                <div class="popover-section-title">已配置的角色 (Roles)</div>
+                <div class="popover-section-title">Configured Roles</div>
                 <div id="role-list" class="role-list"></div>
                 <div class="popover-divider"></div>
-                <div id="btn-toggle-all-models" class="popover-item footer-toggle">🌐 搜索全部底层模型 (200+)...</div>
+                <div id="btn-toggle-all-models" class="popover-item footer-toggle">Search all raw models (200+)...</div>
                 <div id="raw-models-section" class="raw-models-section hidden">
-                  <input type="text" id="model-search" placeholder="搜索模型名称或厂商..." />
+                  <input type="text" id="model-search" placeholder="Search model or provider..." />
                   <div id="model-list" class="popover-list"></div>
                 </div>
               </div>
             </div>
 
             <div class="popover-wrapper">
-              <button id="btn-mode" class="pill-selector" title="选择模式">⚡ Mode▾</button>
+              <button id="btn-mode" class="pill-selector" title="Session mode">Mode: Default▾</button>
               <div id="popover-mode" class="popover hidden"></div>
             </div>
 
             <div class="popover-wrapper">
-              <button id="btn-think" class="pill-selector" title="思考强度">🧠 Think▾</button>
+              <button id="btn-think" class="pill-selector" title="Thinking intensity">Think: high▾</button>
               <div id="popover-think" class="popover hidden"></div>
             </div>
 
             <!-- Rich Slash commands popover -->
             <div id="popover-slash" class="popover slash-popover hidden">
-              <input type="text" id="slash-search" placeholder="搜索斜杠命令 (/)..." />
+              <input type="text" id="slash-search" placeholder="Search commands (/)..." />
               <div id="slash-list" class="slash-list"></div>
             </div>
 
             <!-- Orange Send Button with Up Arrow -->
-            <button id="btn-send" class="send-arrow-btn" title="发送 (Enter)">↑</button>
+            <button id="btn-send" class="send-arrow-btn" title="Send message (Enter)">↑</button>
           </div>
         </div>
       </div>
@@ -244,7 +247,7 @@ function appendUserMessage(text: string, atts: ChatAttachment[]): void {
   let attHtml = '';
   if (atts.length > 0) {
     attHtml = `<div class="msg-attachments">${atts
-      .map((a) => `<span class="pill">${a.kind === 'image' ? '🖼️' : '📄'} ${escapeHtml(a.name)}</span>`)
+      .map((a) => `<span class="pill">${escapeHtml(a.name)}</span>`)
       .join('')}</div>`;
   }
   div.innerHTML = `${attHtml}<div class="msg-text">${escapeHtml(text)}</div>`;
@@ -273,8 +276,8 @@ function appendThoughtChunk(text: string): void {
     currentThinkingEl.innerHTML = `
       <div class="thinking-header">
         <span class="pulse-dot"></span>
-        <span class="thinking-title">深度思考中...</span>
-        <span class="thinking-toggle">展开</span>
+        <span class="thinking-title">Thinking...</span>
+        <span class="thinking-toggle">Collapse</span>
       </div>
       <div class="thinking-body"></div>
     `;
@@ -283,7 +286,7 @@ function appendThoughtChunk(text: string): void {
     const toggle = currentThinkingEl.querySelector('.thinking-toggle')!;
     header.addEventListener('click', () => {
       body.classList.toggle('collapsed');
-      toggle.textContent = body.classList.contains('collapsed') ? '展开' : '折叠';
+      toggle.textContent = body.classList.contains('collapsed') ? 'Expand' : 'Collapse';
     });
     container.appendChild(currentThinkingEl);
   }
@@ -296,7 +299,7 @@ function appendMessageChunk(text: string): void {
   if (currentThinkingEl) {
     const title = currentThinkingEl.querySelector('.thinking-title');
     const dot = currentThinkingEl.querySelector('.pulse-dot');
-    if (title) title.textContent = '💭 深度思考过程';
+    if (title) title.textContent = 'Thought process';
     if (dot) dot.remove();
   }
 
@@ -321,13 +324,13 @@ function renderRateLimitCard(rawError: string): void {
   const card = document.createElement('div');
   card.className = 'rate-limit-card';
   const resetMatch = /reset at ([^\]]+)/.exec(rawError);
-  const resetHint = resetMatch ? ` (预计重置时间: ${resetMatch[1]})` : '';
+  const resetHint = resetMatch ? ` (Resets at: ${resetMatch[1]})` : '';
   card.innerHTML = `
-    <div class="rl-header">⚠️ 触发模型速率限制 (Rate Limit)</div>
-    <div class="rl-body">当前模型暂时达到频率或用量上限${resetHint}。建议点击下方一键切换备用模型继续对话：</div>
+    <div class="rl-header">Rate Limit Reached</div>
+    <div class="rl-body">The current model has reached its usage or rate limit${resetHint}. Switch to an alternate role to continue:</div>
     <div class="rl-actions">
-      <button class="rl-btn" data-role="designer">🎨 切换到 Designer (Gemini 3.7 Flash)</button>
-      <button class="rl-btn" data-role="smol">⚡ 切换到 Smol (极速模型)</button>
+      <button class="rl-btn" data-role="designer">Switch to Designer (Gemini 3.7 Flash)</button>
+      <button class="rl-btn" data-role="smol">Switch to Smol (Fast)</button>
     </div>
   `;
   card.querySelectorAll('.rl-btn').forEach((btn) => {
@@ -348,8 +351,8 @@ function appendToolCall(toolCall: ToolCallPayload): void {
   el.id = `tool-${toolCall.toolCallId}`;
   el.innerHTML = `
     <div class="tool-header">
-      <span class="tool-title">🛠️ ${escapeHtml(toolCall.title || toolCall.kind || 'Tool Call')}</span>
-      <span class="tool-status status-${toolCall.status}">⏳ 运行中</span>
+      <span class="tool-title">Tool: ${escapeHtml(toolCall.title || toolCall.kind || 'Execution')}</span>
+      <span class="tool-status status-${toolCall.status}">Running...</span>
     </div>
     ${toolCall.rawInput ? `<pre class="tool-input">${escapeHtml(JSON.stringify(toolCall.rawInput, null, 2))}</pre>` : ''}
   `;
@@ -362,7 +365,7 @@ function updateToolCall(toolCallId: string, status: string, rawOutput?: unknown)
   if (!el) return;
   const statusEl = el.querySelector('.tool-status')!;
   statusEl.className = `tool-status status-${status}`;
-  statusEl.textContent = status === 'completed' ? '✓ 完成' : status === 'failed' ? '✕ 失败' : status;
+  statusEl.textContent = status === 'completed' ? 'Completed' : status === 'failed' ? 'Failed' : status;
   if (rawOutput) {
     let outEl = el.querySelector('.tool-output');
     if (!outEl) {
@@ -380,7 +383,7 @@ function appendPermissionCard(toolCallId: string, toolCall: ToolCallPayload, opt
   card.className = 'permission-card';
   card.id = `perm-${toolCallId}`;
   card.innerHTML = `
-    <div class="perm-header">⚠️ 权限请求：${escapeHtml(toolCall.title || toolCall.kind || '执行操作')}</div>
+    <div class="perm-header">Permission Request: ${escapeHtml(toolCall.title || toolCall.kind || 'Action')}</div>
     ${toolCall.rawInput ? `<pre class="perm-input">${escapeHtml(JSON.stringify(toolCall.rawInput, null, 2))}</pre>` : ''}
     <div class="perm-actions">
       ${options
@@ -412,7 +415,7 @@ function renderAttachmentPills(): void {
     .map(
       (a, i) => `
     <span class="pill">
-      ${a.kind === 'image' ? '🖼️' : '📄'} ${escapeHtml(a.name)}
+      ${escapeHtml(a.name)}
       <button class="pill-remove" data-idx="${i}">✕</button>
     </span>
   `
@@ -451,6 +454,7 @@ function closeAllPopoversExcept(except?: HTMLElement): void {
     if (p !== except) p.classList.add('hidden');
   });
 }
+
 btnRole.onclick = (e) => {
   e.stopPropagation();
   const isHidden = popoverRole.classList.contains('hidden');
@@ -499,6 +503,7 @@ document.addEventListener('keydown', (e) => {
     historyDrawer.classList.add('hidden');
   }
 });
+
 // Render Slash Commands List with Search
 function renderSlashCommandsList(filterText = ''): void {
   const slashListEl = document.getElementById('slash-list')!;
@@ -567,8 +572,8 @@ function renderRolesList(roles: UserRoleItem[], currentActive: string): void {
   const activeRole = roles.find((r) => r.id === currentActive) || roles[0];
 
   if (activeRole) {
-    btnRole.textContent = `${activeRole.icon} ${activeRole.id}▾`;
-    document.getElementById('badge-role')!.textContent = `${activeRole.icon} ${activeRole.id}`;
+    btnRole.textContent = `Role: ${activeRole.name}▾`;
+    document.getElementById('badge-role')!.textContent = activeRole.name;
   }
 
   const roleListEl = document.getElementById('role-list')!;
@@ -576,8 +581,8 @@ function renderRolesList(roles: UserRoleItem[], currentActive: string): void {
     .map(
       (r) => `
     <div class="popover-item role-item ${r.id === currentActive ? 'active' : ''}" data-role="${r.id}">
-      <div class="item-name">${r.icon} <strong>${escapeHtml(r.name)}</strong></div>
-      <div class="item-desc">${escapeHtml(r.model)} · 🧠 ${escapeHtml(r.thinking)}</div>
+      <div class="item-name"><strong>${escapeHtml(r.name)}</strong></div>
+      <div class="item-desc">${escapeHtml(r.model)} · Think: ${escapeHtml(r.thinking)}</div>
     </div>
   `
     )
@@ -598,7 +603,7 @@ function renderRolesList(roles: UserRoleItem[], currentActive: string): void {
       .map(
         (r) => `
       <button class="role-chip ${r.id === currentActive ? 'active' : ''}" data-role="${r.id}">
-        ${r.icon} ${escapeHtml(r.name)}
+        ${escapeHtml(r.name)}
       </button>
     `
       )
@@ -619,7 +624,7 @@ function renderConfigOptions(options: ConfigOption[]): void {
   if (modeOpt) {
     const curr = String(modeOpt.currentValue);
     const currName = modeOpt.options?.find((o) => o.value === curr)?.name || curr;
-    btnMode.textContent = `⚡ ${currName}▾`;
+    btnMode.textContent = `Mode: ${currName}▾`;
 
     popoverMode.innerHTML = (modeOpt.options || [])
       .map(
@@ -645,14 +650,14 @@ function renderConfigOptions(options: ConfigOption[]): void {
   const thinkOpt = options.find((x) => x.id === 'thinking');
   if (thinkOpt) {
     const curr = String(thinkOpt.currentValue);
-    btnThink.textContent = `🧠 ${curr}▾`;
+    btnThink.textContent = `Think: ${curr}▾`;
 
     popoverThink.innerHTML = (thinkOpt.options || [
-      { value: 'off', name: 'Off (关闭)' },
-      { value: 'auto', name: 'Auto (自动)' },
-      { value: 'low', name: 'Low (轻度)' },
-      { value: 'high', name: 'High (深度)' },
-      { value: 'max', name: 'Max (极限)' },
+      { value: 'off', name: 'Off' },
+      { value: 'auto', name: 'Auto' },
+      { value: 'low', name: 'Low' },
+      { value: 'high', name: 'High' },
+      { value: 'max', name: 'Max' },
     ])
       .map(
         (o) => `
@@ -731,9 +736,9 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
         const fullCwd = m.cwd;
         const parts = fullCwd.replace(/\\/g, '/').split('/').filter(Boolean);
         const folderName = parts.pop() || fullCwd;
-        const badgeCwd = document.getElementById('badge-cwd')!;
-        badgeCwd.textContent = `📁 ${folderName}`;
-        badgeCwd.title = `工作目录: ${fullCwd}`;
+        const badgeCwdName = document.getElementById('badge-cwd-name')!;
+        badgeCwdName.textContent = folderName;
+        document.getElementById('badge-cwd')!.title = `Workspace: ${fullCwd}`;
 
         const welcomeCwdText = document.getElementById('welcome-cwd-text');
         if (welcomeCwdText) {
@@ -777,7 +782,7 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
       if (currentThinkingEl) {
         const title = currentThinkingEl.querySelector('.thinking-title');
         const dot = currentThinkingEl.querySelector('.pulse-dot');
-        if (title) title.textContent = '💭 深度思考完成';
+        if (title) title.textContent = 'Thought process';
         if (dot) dot.remove();
       }
       break;
@@ -792,7 +797,7 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
         .map(
           (s) => `
         <div class="history-item ${s.sessionId === sessionId ? 'active' : ''}" data-id="${s.sessionId}">
-          <div class="history-title">${escapeHtml(s.sessionId.slice(0, 8))} (${s._meta?.messageCount || 0} msgs)</div>
+          <div class="history-title">${escapeHtml(s.sessionId.slice(0, 8))} (${s._meta?.messageCount || 0} messages)</div>
           <div class="history-date">${new Date(s.updatedAt).toLocaleString()}</div>
         </div>
       `
@@ -811,7 +816,7 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
       setGenerating(false);
       const div = document.createElement('div');
       div.className = 'error-card';
-      div.textContent = `❌ ${m.message}`;
+      div.textContent = `Error: ${m.message}`;
       messagesFlow.appendChild(div);
       scrollToBottom();
       break;
@@ -819,7 +824,7 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
   }
 });
 
-// Styles (Claude Code 1:1 Palette & Box)
+// Styles (Clean English, Minimalist Typography & Aesthetics)
 const style = document.createElement('style');
 style.textContent = `
   * { box-sizing: border-box; }
@@ -830,8 +835,9 @@ style.textContent = `
   .header-left, .header-right { display: flex; align-items: center; gap: 6px; }
   .header-btn { background: transparent; border: 1px solid var(--vscode-widget-border, rgba(255,255,255,0.1)); color: var(--vscode-foreground); cursor: pointer; padding: 2px 8px; font-size: 11px; border-radius: 4px; }
   .header-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
-  .badge-cwd { font-size: 11px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--vscode-descriptionForeground); cursor: help; }
+  .badge-cwd { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--vscode-descriptionForeground); cursor: help; }
   .badge-role { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 12px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+  .icon-inline { vertical-align: middle; opacity: 0.8; }
 
   .drawer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 50; background: var(--vscode-editor-background); display: flex; flex-direction: column; }
   .drawer-header { display: flex; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--vscode-widget-border); font-weight: bold; }
@@ -849,7 +855,7 @@ style.textContent = `
   .welcome-logo { color: var(--vscode-foreground); opacity: 0.9; margin-bottom: 4px; }
   .welcome-view h2 { margin: 4px 0 2px; font-size: 20px; font-weight: 600; color: var(--vscode-editor-foreground); }
   .welcome-subtitle { margin: 0; font-size: 12px; opacity: 0.75; }
-  .welcome-cwd-pill { margin-top: 12px; font-size: 11px; padding: 4px 12px; border-radius: 14px; background: var(--vscode-input-background, #252526); border: 1px solid var(--vscode-widget-border, #3c3c3c); word-break: break-all; color: var(--vscode-descriptionForeground); }
+  .welcome-cwd-pill { display: inline-flex; align-items: center; gap: 5px; margin-top: 12px; font-size: 11px; padding: 4px 12px; border-radius: 14px; background: var(--vscode-input-background, #252526); border: 1px solid var(--vscode-widget-border, #3c3c3c); word-break: break-all; color: var(--vscode-descriptionForeground); }
   
   .welcome-roles-quick { margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .quick-title { font-size: 11px; opacity: 0.7; }
@@ -1079,7 +1085,7 @@ style.textContent = `
   .raw-models-section { margin-top: 6px; border-top: 1px solid var(--vscode-widget-border); padding-top: 6px; }
 
   /* Slash Popover Layout */
-  .slash-popover { left: 0; right: auto; min-width: 280px; max-height: 320px; }
+  .slash-popover { left: 0; right: auto; min-width: 290px; max-height: 320px; }
   #slash-search { padding: 6px 8px; font-size: 11px; margin-bottom: 6px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px; width: 100%; }
   .slash-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
   .slash-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 6px 10px; border-radius: 4px; }

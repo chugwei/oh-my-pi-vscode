@@ -11,23 +11,23 @@ export interface UserRoleItem {
 }
 
 const ROLE_ICONS: Record<string, string> = {
-  default: '🎯',
-  plan: '📋',
-  designer: '🎨',
-  smol: '⚡',
-  tiny: '⚡',
-  slow: '🐢',
-  vision: '👁️',
+  default: '',
+  plan: '',
+  designer: '',
+  smol: '',
+  tiny: '',
+  slow: '',
+  vision: '',
 };
 
 const ROLE_NAMES: Record<string, string> = {
-  default: 'Default (日常主力)',
-  plan: 'Plan (架构规划)',
-  designer: 'Designer (前端/设计)',
-  smol: 'Smol (轻量/快速)',
-  tiny: 'Tiny (极速)',
-  slow: 'Slow (深度推理)',
-  vision: 'Vision (视觉感知)',
+  default: 'Default',
+  plan: 'Plan',
+  designer: 'Designer',
+  smol: 'Smol',
+  tiny: 'Tiny',
+  slow: 'Slow',
+  vision: 'Vision',
 };
 
 export class OmpConfigLoader {
@@ -64,7 +64,7 @@ export class OmpConfigLoader {
                 name: ROLE_NAMES[roleId] || roleId,
                 model,
                 thinking,
-                icon: ROLE_ICONS[roleId] || '🤖',
+                icon: ROLE_ICONS[roleId] || '',
               });
             }
           }
@@ -75,10 +75,10 @@ export class OmpConfigLoader {
     if (roles.length === 0) {
       // Fallback defaults if config.yml is absent
       roles.push(
-        { id: 'default', name: 'Default (主力)', model: 'zai/glm-5.3', thinking: 'max', icon: '🎯' },
-        { id: 'plan', name: 'Plan (规划)', model: 'zai/glm-5.3', thinking: 'max', icon: '📋' },
-        { id: 'designer', name: 'Designer (设计)', model: 'google-antigravity/gemini-3.7-flash', thinking: 'high', icon: '🎨' },
-        { id: 'smol', name: 'Smol (快速)', model: 'google-antigravity/gemini-3.7-flash', thinking: 'high', icon: '⚡' },
+        { id: 'default', name: 'Default', model: 'zai/glm-5.3', thinking: 'max', icon: '' },
+        { id: 'plan', name: 'Plan', model: 'zai/glm-5.3', thinking: 'max', icon: '' },
+        { id: 'designer', name: 'Designer', model: 'google-antigravity/gemini-3.7-flash', thinking: 'high', icon: '' },
+        { id: 'smol', name: 'Smol', model: 'google-antigravity/gemini-3.7-flash', thinking: 'high', icon: '' },
       );
     }
 
