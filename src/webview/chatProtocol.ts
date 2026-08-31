@@ -13,6 +13,13 @@ export interface ChatAttachment {
   content: string; // text or base64
 }
 
+export interface UserRoleItem {
+  id: string;
+  name: string;
+  model: string;
+  thinking: string;
+  icon: string;
+}
 export interface ChatMessageItem {
   id: string;
   role: 'user' | 'assistant';
@@ -34,6 +41,7 @@ export type ChatHostMessage =
   | { type: 'setMode'; mode: string }
   | { type: 'setThinking'; thinking: string }
   | { type: 'setModel'; model: string }
+  | { type: 'setRole'; roleId: string }
   | { type: 'prompt'; text: string; attachments: ChatAttachment[] }
   | { type: 'cancel' }
   | { type: 'respondPermission'; toolCallId: string; optionId: string | null }
@@ -46,6 +54,8 @@ export type ChatWebviewMessage =
       sessionId: string;
       cwd: string;
       configOptions: ConfigOption[];
+      roles?: UserRoleItem[];
+      activeRoleId?: string;
       messages: ChatMessageItem[];
     }
   | { type: 'sessionsList'; sessions: SessionSummary[] }

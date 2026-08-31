@@ -2,6 +2,7 @@ import type {
   ChatHostMessage,
   ChatWebviewMessage,
   ChatAttachment,
+  UserRoleItem,
 } from '../chatProtocol.js';
 import type { ConfigOption, PermissionOption, ToolCallPayload } from '../../host/acp/types.js';
 
@@ -18,8 +19,9 @@ let sessionId = '';
 
 let attachments: ChatAttachment[] = [];
 let isGenerating = false;
-let currentThinkingEl: HTMLDetailsElement | null = null;
+let currentThinkingEl: HTMLElement | null = null;
 let currentMessageEl: HTMLElement | null = null;
+let thoughtTextBuf = '';
 
 const app = document.getElementById('app')!;
 
@@ -27,24 +29,25 @@ function post(msg: ChatHostMessage): void {
   vscode.postMessage(msg);
 }
 
-// Render Main App Skeleton (Claude Code 1:1 layout)
+// Render Main App Skeleton (Claude Code High-End Aesthetics)
 app.innerHTML = `
   <div class="chat-container">
     <!-- Top Header -->
     <div class="chat-header">
-      <button id="btn-history" class="header-btn" title="历史会话">≡ 历史</button>
-      <button id="btn-new" class="header-btn" title="新建会话">＋ 新建</button>
-      <div class="spacer"></div>
-      <span id="badge-cwd" class="badge badge-cwd" title="当前工作目录">📁 --</span>
-      <span id="badge-mode" class="badge">Default</span>
-      <span id="badge-think" class="badge">High</span>
-      <span id="badge-model" class="badge">Sonnet</span>
+      <div class="header-left">
+        <button id="btn-history" class="header-btn" title="历史会话">≡ 历史</button>
+        <button id="btn-new" class="header-btn" title="开启新会话">＋ 新建</button>
+      </div>
+      <div class="header-right">
+        <span id="badge-cwd" class="badge-cwd" title="当前工作目录">📁 --</span>
+        <span id="badge-role" class="badge-role">🎯 Default</span>
+      </div>
     </div>
 
     <!-- History Drawer (hidden by default) -->
     <div id="history-drawer" class="drawer hidden">
       <div class="drawer-header">
-        <span>历史会话</span>
+        <span>📜 历史会话</span>
         <button id="btn-close-history" class="header-btn">✕</button>
       </div>
       <div id="history-list" class="history-list"></div>
@@ -53,23 +56,30 @@ app.innerHTML = `
     <!-- Messages Flow Area -->
     <div id="messages-flow" class="messages-flow">
       <div id="welcome-view" class="welcome-view">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M4 5h16v2.5h-4.8V19h-2.4V7.5H9.2V19H6.8V7.5H4V5z"/>
-        </svg>
+        <div class="welcome-logo">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M4 5h16v2.5h-4.8V19h-2.4V7.5H9.2V19H6.8V7.5H4V5z"/>
+          </svg>
+        </div>
         <h2>Oh My Pi</h2>
-        <p>Your AI coding partner in VS Code</p>
+        <p class="welcome-subtitle">Your AI coding partner in VS Code</p>
         <div class="welcome-cwd-pill" id="welcome-cwd-box">
           <span class="cwd-icon">📁</span>
           <span id="welcome-cwd-text">--</span>
         </div>
+        <div class="welcome-roles-quick">
+          <span class="quick-title">选择角色开始：</span>
+          <div id="welcome-roles-list" class="roles-chips"></div>
+        </div>
       </div>
     </div>
+
     <!-- Bottom Input Container (Exact Claude Code Box) -->
     <div class="input-area">
       <!-- Attachment Pills -->
       <div id="attachment-pills" class="attachment-pills hidden"></div>
 
-      <!-- Claude-styled Box -->
+      <!-- Claude-styled Input Card -->
       <div class="claude-input-card">
         <textarea id="prompt-input" rows="1" placeholder="ctrl+alt+o to focus or unfocus Oh My Pi"></textarea>
 
@@ -81,8 +91,22 @@ app.innerHTML = `
             <button id="btn-slash" class="action-btn slash-btn" title="快捷命令">[/]</button>
           </div>
 
-          <!-- Right side selectors: Mode, Think, Model, and Send ↑ -->
+          <!-- Right side selectors: Role/Model, Mode, Think, and Send ↑ -->
           <div class="right-actions">
+            <div class="popover-wrapper">
+              <button id="btn-role" class="pill-selector" title="选择角色与模型">🎯 Role: Default▾</button>
+              <div id="popover-role" class="popover role-popover hidden">
+                <div class="popover-section-title">已配置的角色 (Roles)</div>
+                <div id="role-list" class="role-list"></div>
+                <div class="popover-divider"></div>
+                <div id="btn-toggle-all-models" class="popover-item footer-toggle">🌐 搜索全部底层模型 (200+)...</div>
+                <div id="raw-models-section" class="raw-models-section hidden">
+                  <input type="text" id="model-search" placeholder="搜索模型名称或厂商..." />
+                  <div id="model-list" class="popover-list"></div>
+                </div>
+              </div>
+            </div>
+
             <div class="popover-wrapper">
               <button id="btn-mode" class="pill-selector" title="选择模式">⚡ Mode▾</button>
               <div id="popover-mode" class="popover hidden"></div>
@@ -93,20 +117,12 @@ app.innerHTML = `
               <div id="popover-think" class="popover hidden"></div>
             </div>
 
-            <div class="popover-wrapper">
-              <button id="btn-model" class="pill-selector" title="选择模型">🤖 Model▾</button>
-              <div id="popover-model" class="popover model-popover hidden">
-                <input type="text" id="model-search" placeholder="搜索 200+ 模型..." />
-                <div id="model-list" class="popover-list"></div>
-              </div>
-            </div>
-
             <!-- Slash commands popover -->
             <div id="popover-slash" class="popover slash-popover hidden">
-              <div class="popover-item" data-cmd="/clear"><span class="item-name">/clear</span><span class="item-desc">清空当前消息</span></div>
+              <div class="popover-item" data-cmd="/clear"><span class="item-name">/clear</span><span class="item-desc">清空当前会话消息</span></div>
               <div class="popover-item" data-cmd="/plan"><span class="item-name">/plan</span><span class="item-desc">切换至 Plan 规划模式</span></div>
               <div class="popover-item" data-cmd="/default"><span class="item-name">/default</span><span class="item-desc">切换至 Default 编程模式</span></div>
-              <div class="popover-item" data-cmd="/help"><span class="item-name">/help</span><span class="item-desc">查看帮助与说明</span></div>
+              <div class="popover-item" data-cmd="/help"><span class="item-name">/help</span><span class="item-desc">帮助与使用说明</span></div>
             </div>
 
             <!-- Orange Send Button with Up Arrow -->
@@ -172,6 +188,9 @@ function handleSend(): void {
   attachments = [];
   renderAttachmentPills();
   setGenerating(true);
+  thoughtTextBuf = '';
+  currentThinkingEl = null;
+  currentMessageEl = null;
 }
 
 promptInput.addEventListener('keydown', (e) => {
@@ -217,24 +236,47 @@ function ensureAssistantMessage(): HTMLElement {
 }
 
 function appendThoughtChunk(text: string): void {
+  thoughtTextBuf += text;
   const container = ensureAssistantMessage();
   if (!currentThinkingEl) {
-    currentThinkingEl = document.createElement('details');
-    currentThinkingEl.className = 'thinking-block';
-    currentThinkingEl.open = true;
-    currentThinkingEl.innerHTML = `<summary>💭 正在思考...</summary><div class="thinking-content"></div>`;
+    currentThinkingEl = document.createElement('div');
+    currentThinkingEl.className = 'thinking-card';
+    currentThinkingEl.innerHTML = `
+      <div class="thinking-header">
+        <span class="pulse-dot"></span>
+        <span class="thinking-title">深度思考中...</span>
+        <span class="thinking-toggle">展开</span>
+      </div>
+      <div class="thinking-body"></div>
+    `;
+    const header = currentThinkingEl.querySelector('.thinking-header')!;
+    const body = currentThinkingEl.querySelector('.thinking-body') as HTMLElement;
+    const toggle = currentThinkingEl.querySelector('.thinking-toggle')!;
+    header.addEventListener('click', () => {
+      body.classList.toggle('collapsed');
+      toggle.textContent = body.classList.contains('collapsed') ? '展开' : '折叠';
+    });
     container.appendChild(currentThinkingEl);
   }
-  const content = currentThinkingEl.querySelector('.thinking-content')!;
-  content.textContent += text;
+  const body = currentThinkingEl.querySelector('.thinking-body')!;
+  body.textContent = thoughtTextBuf;
   scrollToBottom();
 }
 
 function appendMessageChunk(text: string): void {
-  if (currentThinkingEl && currentThinkingEl.open) {
-    currentThinkingEl.open = false;
-    currentThinkingEl.querySelector('summary')!.textContent = '💭 思考过程 (已折叠)';
+  if (currentThinkingEl) {
+    const title = currentThinkingEl.querySelector('.thinking-title');
+    const dot = currentThinkingEl.querySelector('.pulse-dot');
+    if (title) title.textContent = '💭 深度思考过程';
+    if (dot) dot.remove();
   }
+
+  // Check for 429 rate limit error in response
+  if (text.includes('rate_limit_error') || text.includes('429') && text.includes('error')) {
+    renderRateLimitCard(text);
+    return;
+  }
+
   const container = ensureAssistantMessage();
   if (!currentMessageEl) {
     currentMessageEl = document.createElement('div');
@@ -242,6 +284,31 @@ function appendMessageChunk(text: string): void {
     container.appendChild(currentMessageEl);
   }
   currentMessageEl.textContent += text;
+  scrollToBottom();
+}
+
+function renderRateLimitCard(rawError: string): void {
+  const container = ensureAssistantMessage();
+  const card = document.createElement('div');
+  card.className = 'rate-limit-card';
+  const resetMatch = /reset at ([^\]]+)/.exec(rawError);
+  const resetHint = resetMatch ? ` (预计重置时间: ${resetMatch[1]})` : '';
+  card.innerHTML = `
+    <div class="rl-header">⚠️ 触发模型速率限制 (Rate Limit)</div>
+    <div class="rl-body">当前模型暂时达到频率或用量上限${resetHint}。建议点击下方一键切换备用模型继续对话：</div>
+    <div class="rl-actions">
+      <button class="rl-btn" data-role="designer">🎨 切换到 Designer (Gemini 3.7 Flash)</button>
+      <button class="rl-btn" data-role="smol">⚡ 切换到 Smol (极速模型)</button>
+    </div>
+  `;
+  card.querySelectorAll('.rl-btn').forEach((btn) => {
+    (btn as HTMLButtonElement).onclick = () => {
+      const roleId = btn.getAttribute('data-role')!;
+      post({ type: 'setRole', roleId });
+      card.remove();
+    };
+  });
+  container.appendChild(card);
   scrollToBottom();
 }
 
@@ -341,20 +408,26 @@ function escapeHtml(s: string): string {
 }
 
 // Popovers
+const popoverRole = document.getElementById('popover-role')!;
 const popoverMode = document.getElementById('popover-mode')!;
 const popoverThink = document.getElementById('popover-think')!;
-const popoverModel = document.getElementById('popover-model')!;
 const popoverSlash = document.getElementById('popover-slash')!;
+const btnRole = document.getElementById('btn-role')!;
 const btnMode = document.getElementById('btn-mode')!;
 const btnThink = document.getElementById('btn-think')!;
-const btnModel = document.getElementById('btn-model')!;
 const btnSlash = document.getElementById('btn-slash')!;
 
 function closeAllPopoversExcept(except?: HTMLElement): void {
-  [popoverMode, popoverThink, popoverModel, popoverSlash].forEach((p) => {
+  [popoverRole, popoverMode, popoverThink, popoverSlash].forEach((p) => {
     if (p !== except) p.classList.add('hidden');
   });
 }
+
+btnRole.onclick = () => {
+  const isHidden = popoverRole.classList.contains('hidden');
+  closeAllPopoversExcept();
+  if (isHidden) popoverRole.classList.remove('hidden');
+};
 
 btnMode.onclick = () => {
   const isHidden = popoverMode.classList.contains('hidden');
@@ -366,15 +439,6 @@ btnThink.onclick = () => {
   const isHidden = popoverThink.classList.contains('hidden');
   closeAllPopoversExcept();
   if (isHidden) popoverThink.classList.remove('hidden');
-};
-
-btnModel.onclick = () => {
-  const isHidden = popoverModel.classList.contains('hidden');
-  closeAllPopoversExcept();
-  if (isHidden) {
-    popoverModel.classList.remove('hidden');
-    (document.getElementById('model-search') as HTMLInputElement).focus();
-  }
 };
 
 btnSlash.onclick = () => {
@@ -405,8 +469,69 @@ document.getElementById('btn-new')!.onclick = () => {
   post({ type: 'newSession' });
 };
 
+// Toggle all models search section inside Role popover
+document.getElementById('btn-toggle-all-models')!.onclick = () => {
+  const rawSec = document.getElementById('raw-models-section')!;
+  rawSec.classList.toggle('hidden');
+  if (!rawSec.classList.contains('hidden')) {
+    (document.getElementById('model-search') as HTMLInputElement).focus();
+  }
+};
+
+// Render Roles & Config
+function renderRolesList(roles: UserRoleItem[], currentActive: string): void {
+
+  const activeRole = roles.find((r) => r.id === currentActive) || roles[0];
+
+  if (activeRole) {
+    btnRole.textContent = `${activeRole.icon} ${activeRole.id}▾`;
+    document.getElementById('badge-role')!.textContent = `${activeRole.icon} ${activeRole.id}`;
+  }
+
+  const roleListEl = document.getElementById('role-list')!;
+  roleListEl.innerHTML = roles
+    .map(
+      (r) => `
+    <div class="popover-item role-item ${r.id === currentActive ? 'active' : ''}" data-role="${r.id}">
+      <div class="item-name">${r.icon} <strong>${escapeHtml(r.name)}</strong></div>
+      <div class="item-desc">${escapeHtml(r.model)} · 🧠 ${escapeHtml(r.thinking)}</div>
+    </div>
+  `
+    )
+    .join('');
+
+  roleListEl.querySelectorAll('.role-item').forEach((item) => {
+    (item as HTMLElement).onclick = () => {
+      const roleId = item.getAttribute('data-role')!;
+      post({ type: 'setRole', roleId });
+      popoverRole.classList.add('hidden');
+    };
+  });
+
+  // Welcome view chips
+  const welcomeChips = document.getElementById('welcome-roles-list');
+  if (welcomeChips) {
+    welcomeChips.innerHTML = roles
+      .map(
+        (r) => `
+      <button class="role-chip ${r.id === currentActive ? 'active' : ''}" data-role="${r.id}">
+        ${r.icon} ${escapeHtml(r.name)}
+      </button>
+    `
+      )
+      .join('');
+    welcomeChips.querySelectorAll('.role-chip').forEach((chip) => {
+      (chip as HTMLButtonElement).onclick = () => {
+        const roleId = chip.getAttribute('data-role')!;
+        post({ type: 'setRole', roleId });
+      };
+    });
+  }
+}
+
 // Render Config Popovers
 function renderConfigOptions(options: ConfigOption[]): void {
+
 
   // 1. Mode Option
   const modeOpt = options.find((x) => x.id === 'mode');
@@ -414,7 +539,6 @@ function renderConfigOptions(options: ConfigOption[]): void {
     const curr = String(modeOpt.currentValue);
     const currName = modeOpt.options?.find((o) => o.value === curr)?.name || curr;
     btnMode.textContent = `⚡ ${currName}▾`;
-    document.getElementById('badge-mode')!.textContent = currName;
 
     popoverMode.innerHTML = (modeOpt.options || [])
       .map(
@@ -441,14 +565,13 @@ function renderConfigOptions(options: ConfigOption[]): void {
   if (thinkOpt) {
     const curr = String(thinkOpt.currentValue);
     btnThink.textContent = `🧠 ${curr}▾`;
-    document.getElementById('badge-think')!.textContent = curr;
 
     popoverThink.innerHTML = (thinkOpt.options || [
-      { value: 'off', name: 'Off' },
-      { value: 'auto', name: 'Auto' },
-      { value: 'low', name: 'Low' },
-      { value: 'high', name: 'High' },
-      { value: 'max', name: 'Max' },
+      { value: 'off', name: 'Off (关闭)' },
+      { value: 'auto', name: 'Auto (自动)' },
+      { value: 'low', name: 'Low (轻度)' },
+      { value: 'high', name: 'High (深度)' },
+      { value: 'max', name: 'Max (极限)' },
     ])
       .map(
         (o) => `
@@ -468,14 +591,10 @@ function renderConfigOptions(options: ConfigOption[]): void {
     });
   }
 
-  // 3. Model Option
+  // 3. Raw Models Fallback Search
   const modelOpt = options.find((x) => x.id === 'model');
   if (modelOpt) {
     const curr = String(modelOpt.currentValue);
-    const shortName = curr.split('/').pop() || curr;
-    btnModel.textContent = `🤖 ${shortName}▾`;
-    document.getElementById('badge-model')!.textContent = shortName;
-
     const modelListEl = document.getElementById('model-list')!;
     const searchInput = document.getElementById('model-search') as HTMLInputElement;
 
@@ -484,7 +603,7 @@ function renderConfigOptions(options: ConfigOption[]): void {
         (o) => o.name.toLowerCase().includes(filterText) || o.value.toLowerCase().includes(filterText)
       );
       modelListEl.innerHTML = filtered
-        .slice(0, 60)
+        .slice(0, 50)
         .map(
           (o) => `
         <div class="popover-item ${o.value === curr ? 'active' : ''}" data-val="${o.value}">
@@ -499,7 +618,7 @@ function renderConfigOptions(options: ConfigOption[]): void {
         (item as HTMLElement).onclick = () => {
           const val = item.getAttribute('data-val')!;
           post({ type: 'setModel', model: val });
-          popoverModel.classList.add('hidden');
+          popoverRole.classList.add('hidden');
         };
       });
     };
@@ -540,6 +659,9 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
           welcomeCwdText.textContent = fullCwd;
         }
       }
+      if (m.roles && m.roles.length > 0) {
+        renderRolesList(m.roles, m.activeRoleId || 'default');
+      }
       if (m.configOptions && m.configOptions.length > 0) {
         renderConfigOptions(m.configOptions);
       }
@@ -567,8 +689,12 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
     }
     case 'promptDone': {
       setGenerating(false);
-      currentThinkingEl = null;
-      currentMessageEl = null;
+      if (currentThinkingEl) {
+        const title = currentThinkingEl.querySelector('.thinking-title');
+        const dot = currentThinkingEl.querySelector('.pulse-dot');
+        if (title) title.textContent = '💭 深度思考完成';
+        if (dot) dot.remove();
+      }
       break;
     }
     case 'attachmentPicked': {
@@ -612,53 +738,131 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
 const style = document.createElement('style');
 style.textContent = `
   * { box-sizing: border-box; }
-  html, body, #app { height: 100%; margin: 0; padding: 0; font-family: var(--vscode-font-family); color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); }
+  html, body, #app { height: 100%; margin: 0; padding: 0; font-family: var(--vscode-font-family); color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); overflow: hidden; }
   .chat-container { display: flex; flex-direction: column; height: 100%; position: relative; }
   
-  .chat-header { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--vscode-widget-border); min-height: 32px; }
-  .spacer { flex: 1; }
-  .header-btn { background: transparent; border: none; color: var(--vscode-foreground); cursor: pointer; padding: 2px 6px; font-size: 11px; border-radius: 4px; }
+  .chat-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; border-bottom: 1px solid var(--vscode-widget-border, #333); min-height: 34px; background: var(--vscode-sideBar-background); }
+  .header-left, .header-right { display: flex; align-items: center; gap: 6px; }
+  .header-btn { background: transparent; border: 1px solid var(--vscode-widget-border, rgba(255,255,255,0.1)); color: var(--vscode-foreground); cursor: pointer; padding: 2px 8px; font-size: 11px; border-radius: 4px; }
   .header-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
-  .badge { font-size: 10px; padding: 2px 6px; border-radius: 10px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
-  .badge-cwd { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; background: var(--vscode-badge-background, rgba(255,255,255,0.1)); }
+  .badge-cwd { font-size: 11px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--vscode-descriptionForeground); cursor: help; }
+  .badge-role { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 12px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
 
   .drawer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 50; background: var(--vscode-editor-background); display: flex; flex-direction: column; }
-  .drawer-header { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--vscode-widget-border); font-weight: bold; }
+  .drawer-header { display: flex; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--vscode-widget-border); font-weight: bold; }
   .history-list { flex: 1; overflow-y: auto; padding: 8px; }
-  .history-item { padding: 6px 10px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; }
+  .history-item { padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-bottom: 4px; border: 1px solid transparent; }
   .history-item:hover { background: var(--vscode-list-hoverBackground); }
-  .history-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+  .history-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); border-color: var(--vscode-focusBorder); }
   .history-title { font-size: 12px; font-weight: 500; }
-  .history-date { font-size: 10px; opacity: 0.7; }
+  .history-date { font-size: 10px; opacity: 0.65; margin-top: 2px; }
 
-  .messages-flow { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-  .welcome-view { margin: auto; text-align: center; color: var(--vscode-descriptionForeground); display: flex; flex-direction: column; align-items: center; }
-  .welcome-view h2 { margin: 8px 0 4px; color: var(--vscode-editor-foreground); }
-  .welcome-cwd-pill { margin-top: 10px; font-size: 11px; padding: 4px 10px; border-radius: 12px; background: var(--vscode-input-background, #252526); border: 1px solid var(--vscode-widget-border, #3c3c3c); max-width: 90%; word-break: break-all; color: var(--vscode-descriptionForeground); }
-  .message { display: flex; flex-direction: column; gap: 4px; max-width: 95%; }
-  .user-message { align-self: flex-end; background: var(--vscode-input-background); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--vscode-input-border); }
+  .messages-flow { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 12px; display: flex; flex-direction: column; gap: 14px; }
+  
+  /* Welcome View */
+  .welcome-view { margin: auto; text-align: center; color: var(--vscode-descriptionForeground); display: flex; flex-direction: column; align-items: center; max-width: 90%; }
+  .welcome-logo { color: var(--vscode-foreground); opacity: 0.9; margin-bottom: 4px; }
+  .welcome-view h2 { margin: 4px 0 2px; font-size: 20px; font-weight: 600; color: var(--vscode-editor-foreground); }
+  .welcome-subtitle { margin: 0; font-size: 12px; opacity: 0.75; }
+  .welcome-cwd-pill { margin-top: 12px; font-size: 11px; padding: 4px 12px; border-radius: 14px; background: var(--vscode-input-background, #252526); border: 1px solid var(--vscode-widget-border, #3c3c3c); word-break: break-all; color: var(--vscode-descriptionForeground); }
+  
+  .welcome-roles-quick { margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .quick-title { font-size: 11px; opacity: 0.7; }
+  .roles-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .role-chip { background: var(--vscode-button-secondaryBackground, #3a3d41); color: var(--vscode-button-secondaryForeground, #fff); border: 1px solid var(--vscode-widget-border, rgba(255,255,255,0.1)); border-radius: 14px; padding: 4px 10px; font-size: 11px; cursor: pointer; transition: all 0.15s ease; }
+  .role-chip:hover { filter: brightness(1.2); }
+  .role-chip.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
+
+  /* Message Bubbles */
+  .message { display: flex; flex-direction: column; gap: 4px; max-width: 96%; }
+  .user-message { align-self: flex-end; background: var(--vscode-input-background, #2d2d2d); padding: 9px 14px; border-radius: 12px 12px 2px 12px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .user-message .msg-text { font-size: 13px; line-height: 1.5; }
+  
   .assistant-message { align-self: flex-start; width: 100%; }
-  .assistant-text { font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .assistant-text { font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: var(--vscode-editor-foreground); padding: 2px 4px; }
 
-  .thinking-block { border-left: 2px solid var(--vscode-focusBorder); padding: 4px 8px; margin: 4px 0; background: color-mix(in srgb, var(--vscode-editor-background) 90%, var(--vscode-focusBorder)); font-size: 11px; border-radius: 0 4px 4px 0; }
-  .thinking-block summary { cursor: pointer; opacity: 0.8; font-weight: 500; }
-  .thinking-content { margin-top: 4px; opacity: 0.75; white-space: pre-wrap; max-height: 150px; overflow-y: auto; }
+  /* Thinking Box */
+  .thinking-card {
+    border: 1px solid var(--vscode-widget-border, #3a3a3a);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+    margin: 6px 0 10px;
+    overflow: hidden;
+  }
+  .thinking-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    user-select: none;
+  }
+  .thinking-header:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #007acc;
+    box-shadow: 0 0 8px #007acc;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0% { transform: scale(0.9); opacity: 0.7; }
+    50% { transform: scale(1.3); opacity: 1; }
+    100% { transform: scale(0.9); opacity: 0.7; }
+  }
+  .thinking-title { flex: 1; opacity: 0.85; }
+  .thinking-toggle { font-size: 10px; opacity: 0.5; }
+  .thinking-body {
+    padding: 8px 10px;
+    font-size: 11px;
+    line-height: 1.5;
+    opacity: 0.75;
+    font-family: var(--vscode-editor-font-family, monospace);
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .thinking-body.collapsed { display: none; }
 
-  .tool-card { border: 1px solid var(--vscode-widget-border); border-radius: 6px; padding: 6px 10px; margin: 6px 0; background: var(--vscode-editorWidget-background); font-size: 12px; }
+  /* Rate Limit Warning Card */
+  .rate-limit-card {
+    border: 1px solid var(--vscode-inputValidation-warningBorder, #cca700);
+    background: var(--vscode-inputValidation-warningBackground, rgba(204,167,0,0.15));
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 8px 0;
+  }
+  .rl-header { font-size: 12px; font-weight: bold; color: var(--vscode-editorWarning-foreground, #ffcc00); margin-bottom: 4px; }
+  .rl-body { font-size: 11px; line-height: 1.4; opacity: 0.85; margin-bottom: 8px; }
+  .rl-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rl-btn { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
+  .rl-btn:hover { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+
+  /* Tool & Permission Cards */
+  .tool-card { border: 1px solid var(--vscode-widget-border, #3a3a3a); border-radius: 6px; padding: 8px 10px; margin: 6px 0; background: var(--vscode-editorWidget-background); font-size: 12px; }
   .tool-header { display: flex; justify-content: space-between; font-weight: 500; }
   .tool-status.status-completed { color: var(--vscode-testing-iconPassed); }
   .tool-status.status-failed { color: var(--vscode-testing-iconFailed); }
-  .tool-input, .tool-output { background: var(--vscode-textCodeBlock-background); padding: 4px 6px; border-radius: 4px; font-size: 11px; overflow-x: auto; margin: 4px 0 0; }
+  .tool-input, .tool-output { background: var(--vscode-textCodeBlock-background); padding: 6px 8px; border-radius: 4px; font-size: 11px; overflow-x: auto; margin: 6px 0 0; }
 
-  .permission-card { border: 1px solid var(--vscode-inputValidation-warningBorder); background: var(--vscode-inputValidation-warningBackground); border-radius: 6px; padding: 8px 10px; margin: 8px 0; font-size: 12px; }
+  .permission-card { border: 1px solid var(--vscode-inputValidation-warningBorder); background: var(--vscode-inputValidation-warningBackground); border-radius: 8px; padding: 10px 12px; margin: 8px 0; font-size: 12px; }
   .perm-header { font-weight: bold; margin-bottom: 4px; }
-  .perm-input { font-size: 11px; margin: 4px 0; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 3px; }
-  /* Input Area (Claude Code 1:1 Box) */
-  .input-area { flex-shrink: 0; padding: 8px 10px; background: var(--vscode-editor-background); border-top: 1px solid var(--vscode-widget-border); }
+  .perm-input { font-size: 11px; margin: 6px 0; background: rgba(0,0,0,0.25); padding: 6px; border-radius: 4px; }
+  .perm-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .perm-btn { padding: 4px 10px; font-size: 11px; border-radius: 4px; border: none; cursor: pointer; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
   .perm-btn.opt-allow_once, .perm-btn.opt-allow_always { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 
+  /* Input Area (Claude Code 1:1 Box) */
+  .input-area { flex-shrink: 0; padding: 8px 12px 12px; background: var(--vscode-editor-background); border-top: 1px solid var(--vscode-widget-border, #333); }
   .attachment-pills { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
-  .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 6px; border-radius: 12px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+  .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 12px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   .pill-remove { background: transparent; border: none; color: inherit; cursor: pointer; padding: 0 2px; }
 
   .claude-input-card {
@@ -668,7 +872,7 @@ style.textContent = `
     padding: 8px 10px 6px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
   }
   .claude-input-card:focus-within {
     border-color: var(--vscode-focusBorder, #007acc);
@@ -698,11 +902,7 @@ style.textContent = `
     padding-top: 4px;
   }
 
-  .left-actions {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-  }
+  .left-actions { display: flex; gap: 4px; align-items: center; }
 
   .action-btn {
     background: transparent;
@@ -714,24 +914,10 @@ style.textContent = `
     border-radius: 4px;
     opacity: 0.8;
   }
-  .action-btn:hover {
-    background: var(--vscode-toolbar-hoverBackground);
-    opacity: 1;
-  }
-  .slash-btn {
-    font-family: monospace;
-    font-size: 12px;
-    font-weight: bold;
-    border: 1px solid var(--vscode-widget-border, rgba(255,255,255,0.15));
-    padding: 1px 5px;
-  }
+  .action-btn:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
+  .slash-btn { font-family: monospace; font-size: 12px; font-weight: bold; border: 1px solid var(--vscode-widget-border, rgba(255,255,255,0.15)); padding: 1px 5px; }
 
-  .right-actions {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    position: relative;
-  }
+  .right-actions { display: flex; gap: 6px; align-items: center; position: relative; }
 
   .pill-selector {
     background: transparent;
@@ -742,11 +928,9 @@ style.textContent = `
     font-size: 11px;
     cursor: pointer;
     opacity: 0.85;
+    white-space: nowrap;
   }
-  .pill-selector:hover {
-    background: var(--vscode-toolbar-hoverBackground);
-    opacity: 1;
-  }
+  .pill-selector:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
 
   .send-arrow-btn {
     background: #c15c25;
@@ -763,12 +947,8 @@ style.textContent = `
     cursor: pointer;
     transition: filter 0.15s ease;
   }
-  .send-arrow-btn:hover {
-    filter: brightness(1.15);
-  }
-  .send-arrow-btn.stop-btn {
-    background: #d32f2f;
-  }
+  .send-arrow-btn:hover { filter: brightness(1.15); }
+  .send-arrow-btn.stop-btn { background: #d32f2f; }
 
   /* Popovers */
   .popover-wrapper { position: relative; }
@@ -779,42 +959,29 @@ style.textContent = `
     z-index: 50;
     background: var(--vscode-editorWidget-background, #252526);
     border: 1px solid var(--vscode-widget-border, #454545);
-    border-radius: 6px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-    min-width: 150px;
-    max-height: 220px;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    min-width: 170px;
+    max-height: 260px;
     overflow-y: auto;
-    padding: 4px;
+    padding: 6px;
   }
-  .popover-item {
-    padding: 5px 8px;
-    font-size: 11px;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  .popover-item:hover {
-    background: var(--vscode-list-hoverBackground);
-  }
-  .popover-item.active {
-    background: var(--vscode-list-activeSelectionBackground);
-    color: var(--vscode-list-activeSelectionForeground);
-  }
-  .item-desc { font-size: 10px; opacity: 0.65; }
+  .popover-section-title { font-size: 10px; font-weight: bold; opacity: 0.6; padding: 4px 8px; text-transform: uppercase; }
+  .popover-divider { height: 1px; background: var(--vscode-widget-border, #3a3a3a); margin: 4px 0; }
+  .popover-item { padding: 6px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; }
+  .popover-item:hover { background: var(--vscode-list-hoverBackground); }
+  .popover-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+  .item-desc { font-size: 10px; opacity: 0.65; margin-top: 2px; }
+  
+  .role-popover { min-width: 260px; }
+  .footer-toggle { font-size: 11px; opacity: 0.8; padding: 6px 8px; color: var(--vscode-textLink-foreground); }
+  .raw-models-section { margin-top: 6px; border-top: 1px solid var(--vscode-widget-border); padding-top: 6px; }
 
   .slash-popover { left: 0; right: auto; min-width: 180px; }
-  .model-popover { min-width: 240px; max-height: 280px; display: flex; flex-direction: column; }
-  #model-search {
-    padding: 4px 8px;
-    font-size: 11px;
-    margin-bottom: 4px;
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: 1px solid var(--vscode-input-border);
-    border-radius: 4px;
-  }
-  .popover-list { flex: 1; overflow-y: auto; }
+  #model-search { padding: 4px 8px; font-size: 11px; margin-bottom: 4px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px; width: 100%; }
+  .popover-list { max-height: 140px; overflow-y: auto; }
 
-  .error-card { color: var(--vscode-errorForeground); padding: 6px; font-size: 12px; }
+  .error-card { color: var(--vscode-errorForeground); padding: 8px; font-size: 12px; background: rgba(255,0,0,0.1); border-radius: 6px; margin: 4px 0; }
   .hidden { display: none !important; }
 `;
 document.head.appendChild(style);

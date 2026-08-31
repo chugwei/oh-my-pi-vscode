@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { AcpClient } from './acp/client.js';
 import { ModePresetResolver } from './acp/modePresets.js';
+import { OmpConfigLoader, type UserRoleItem } from './acp/roles.js';
 import type {
   ChatHostMessage,
   ChatWebviewMessage,
@@ -15,17 +16,18 @@ export class AcpChatViewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private currentSessionId: string | null = null;
   private currentConfigOptions: ConfigOption[] = [];
+  private userRoles: UserRoleItem[] = [];
+  private activeRoleId = 'default';
   private messages: ChatMessageItem[] = [];
   private pendingPermissions = new Map<string, (optionId: string | null) => void>();
-
   constructor(
     private readonly ctx: vscode.ExtensionContext,
     private readonly acp: AcpClient,
     private readonly presetResolver: ModePresetResolver,
   ) {
+    this.userRoles = OmpConfigLoader.loadUserRoles();
     this.setupAcpListeners();
   }
-
   private setupAcpListeners(): void {
     this.acp.onUpdate((update) => {
       if (update.sessionUpdate === 'agent_thought_chunk') {
@@ -152,6 +154,21 @@ export class AcpChatViewProvider implements vscode.WebviewViewProvider {
           this.postSessionState();
           break;
         }
+        case 'setRole': {
+          if (!this.currentSessionId) return;
+          const role = this.userRoles.find((r) => r.id === m.roleId);
+          if (role) {
+            this.activeRoleId = role.id;
+            const mRes = await this.acp.setConfigOption(this.currentSessionId, 'model', role.model);
+            if (mRes.configOptions) this.currentConfigOptions = mRes.configOptions;
+            if (role.thinking) {
+              const tRes = await this.acp.setConfigOption(this.currentSessionId, 'thinking', role.thinking);
+              if (tRes.configOptions) this.currentConfigOptions = tRes.configOptions;
+            }
+            this.postSessionState();
+          }
+          break;
+        }
         case 'prompt': {
           if (!this.currentSessionId) return;
           const contentBlocks: ContentBlock[] = [];
@@ -241,11 +258,14 @@ export class AcpChatViewProvider implements vscode.WebviewViewProvider {
 
   private postSessionState(): void {
     if (!this.currentSessionId) return;
+    this.userRoles = OmpConfigLoader.loadUserRoles();
     this.postMessage({
       type: 'sessionState',
       sessionId: this.currentSessionId,
       cwd: this.getWorkspaceRoot(),
       configOptions: this.currentConfigOptions,
+      roles: this.userRoles,
+      activeRoleId: this.activeRoleId,
       messages: this.messages,
     });
   }
