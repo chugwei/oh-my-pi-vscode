@@ -14,6 +14,7 @@ export function openOmpInEditor(ctx: vscode.ExtensionContext, executable: string
     },
   });
   term.show();
-  term.sendText([executable, ...args].join(' '), true);
+  const quoted = /\s/.test(executable) ? `"${executable}"` : executable;
+  term.sendText([quoted, ...args].join(' '), true);
   return term;
 }

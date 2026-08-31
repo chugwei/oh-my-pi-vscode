@@ -1153,7 +1153,8 @@ export function openOmpInEditor(ctx: vscode.ExtensionContext, executable: string
     },
   });
   term.show();
-  term.sendText([executable, ...args].join(' '), true);
+  const quoted = /\s/.test(executable) ? `"${executable}"` : executable;
+  term.sendText([quoted, ...args].join(' '), true);
   return term;
 }
 ```
@@ -1438,17 +1439,15 @@ function renderTabs(): void {
     labelSpan.className = 'tab-label';
     labelSpan.textContent = label(t.info);
     b.appendChild(labelSpan);
-    if (!t.info.exited) {
-      const x = document.createElement('span');
-      x.className = 'tab-close';
-      x.textContent = '×';
-      x.title = 'Close session';
-      x.onclick = (ev) => {
-        ev.stopPropagation();
-        post({ type: 'close', sessionId: t.info.id });
-      };
-      b.appendChild(x);
-    }
+    const x = document.createElement('span');
+    x.className = 'tab-close';
+    x.textContent = '×';
+    x.title = 'Close session';
+    x.onclick = (ev) => {
+      ev.stopPropagation();
+      post({ type: 'close', sessionId: t.info.id });
+    };
+    b.appendChild(x);
     b.onclick = () => {
       if (t.info.exited) {
         post({ type: 'restart', sessionId: t.info.id });
