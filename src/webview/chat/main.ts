@@ -35,6 +35,7 @@ app.innerHTML = `
       <button id="btn-history" class="header-btn" title="历史会话">≡ 历史</button>
       <button id="btn-new" class="header-btn" title="新建会话">＋ 新建</button>
       <div class="spacer"></div>
+      <span id="badge-cwd" class="badge badge-cwd" title="当前工作目录">📁 --</span>
       <span id="badge-mode" class="badge">Default</span>
       <span id="badge-think" class="badge">High</span>
       <span id="badge-model" class="badge">Sonnet</span>
@@ -57,7 +58,10 @@ app.innerHTML = `
         </svg>
         <h2>Oh My Pi</h2>
         <p>Your AI coding partner in VS Code</p>
-      </div>
+        <div class="welcome-cwd-pill" id="welcome-cwd-box">
+          <span class="cwd-icon">📁</span>
+          <span id="welcome-cwd-text">--</span>
+        </div>
     </div>
 
     <!-- Bottom Input Container (Exact Claude Code Box) -->
@@ -523,6 +527,19 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
   switch (m.type) {
     case 'sessionState': {
       sessionId = m.sessionId;
+      if (m.cwd) {
+        const fullCwd = m.cwd;
+        const parts = fullCwd.replace(/\\/g, '/').split('/').filter(Boolean);
+        const folderName = parts.pop() || fullCwd;
+        const badgeCwd = document.getElementById('badge-cwd')!;
+        badgeCwd.textContent = `📁 ${folderName}`;
+        badgeCwd.title = `工作目录: ${fullCwd}`;
+
+        const welcomeCwdText = document.getElementById('welcome-cwd-text');
+        if (welcomeCwdText) {
+          welcomeCwdText.textContent = fullCwd;
+        }
+      }
       if (m.configOptions && m.configOptions.length > 0) {
         renderConfigOptions(m.configOptions);
       }
@@ -603,6 +620,7 @@ style.textContent = `
   .header-btn { background: transparent; border: none; color: var(--vscode-foreground); cursor: pointer; padding: 2px 6px; font-size: 11px; border-radius: 4px; }
   .header-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
   .badge { font-size: 10px; padding: 2px 6px; border-radius: 10px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+  .badge-cwd { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; background: var(--vscode-badge-background, rgba(255,255,255,0.1)); }
 
   .drawer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 50; background: var(--vscode-editor-background); display: flex; flex-direction: column; }
   .drawer-header { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--vscode-widget-border); font-weight: bold; }
@@ -614,9 +632,9 @@ style.textContent = `
   .history-date { font-size: 10px; opacity: 0.7; }
 
   .messages-flow { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-  .welcome-view { margin: auto; text-align: center; color: var(--vscode-descriptionForeground); }
+  .welcome-view { margin: auto; text-align: center; color: var(--vscode-descriptionForeground); display: flex; flex-direction: column; align-items: center; }
   .welcome-view h2 { margin: 8px 0 4px; color: var(--vscode-editor-foreground); }
-
+  .welcome-cwd-pill { margin-top: 10px; font-size: 11px; padding: 4px 10px; border-radius: 12px; background: var(--vscode-input-background, #252526); border: 1px solid var(--vscode-widget-border, #3c3c3c); max-width: 90%; word-break: break-all; color: var(--vscode-descriptionForeground); }
   .message { display: flex; flex-direction: column; gap: 4px; max-width: 95%; }
   .user-message { align-self: flex-end; background: var(--vscode-input-background); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--vscode-input-border); }
   .assistant-message { align-self: flex-start; width: 100%; }

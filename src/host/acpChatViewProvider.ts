@@ -244,6 +244,7 @@ export class AcpChatViewProvider implements vscode.WebviewViewProvider {
     this.postMessage({
       type: 'sessionState',
       sessionId: this.currentSessionId,
+      cwd: this.getWorkspaceRoot(),
       configOptions: this.currentConfigOptions,
       messages: this.messages,
     });

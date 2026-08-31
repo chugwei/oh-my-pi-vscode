@@ -44,6 +44,7 @@ export type ChatWebviewMessage =
   | {
       type: 'sessionState';
       sessionId: string;
+      cwd: string;
       configOptions: ConfigOption[];
       messages: ChatMessageItem[];
     }
