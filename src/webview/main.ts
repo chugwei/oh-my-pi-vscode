@@ -76,7 +76,7 @@ function createTab(info: SessionInfo, replay?: string): Tab {
   term.loadAddon(fit);
   const el = document.createElement('div');
   el.className = 'term';
-  app.appendChild(el);
+  document.getElementById('term-area')!.appendChild(el);
   term.open(el);
   const tab: Tab = { info, term, fit, el };
   term.onData((d) => {
@@ -91,50 +91,33 @@ function createTab(info: SessionInfo, replay?: string): Tab {
   return tab;
 }
 
+function activeTab(): Tab | undefined {
+  return activeId ? tabs.get(activeId) : undefined;
+}
+
 function label(info: SessionInfo): string {
   return info.exited ? `${info.title} [exited]` : info.title;
 }
 
-function renderTabs(): void {
-  document.querySelectorAll('.tabbar button.tab').forEach((n) => n.remove());
-  const bar = document.getElementById('tabbar')!;
-  for (const t of tabs.values()) {
-    const b = document.createElement('button');
-    b.className = 'tab' + (t.info.id === activeId ? ' active' : '');
-    b.title = t.info.exited ? 'Restart' : 'Switch';
-    const labelSpan = document.createElement('span');
-    labelSpan.className = 'tab-label';
-    labelSpan.textContent = label(t.info);
-    b.appendChild(labelSpan);
-    const x = document.createElement('span');
-    x.className = 'tab-close';
-    x.textContent = '×';
-    x.title = 'Close session';
-    x.onclick = (ev) => {
-      ev.stopPropagation();
-      post({ type: 'close', sessionId: t.info.id });
-    };
-    b.appendChild(x);
-    b.onclick = () => {
-      if (t.info.exited) {
-        post({ type: 'restart', sessionId: t.info.id });
-      } else {
-        activeId = t.info.id;
-        renderTabs();
-        post({ type: 'switch', sessionId: t.info.id });
-      }
-    };
-    bar.insertBefore(b, document.getElementById('newtab'));
-  }
+function renderChrome(): void {
+  const act = activeTab();
+  document.getElementById('session-title')!.textContent = act ? label(act.info) : 'Oh My Pi';
   for (const t of tabs.values()) {
     t.el.classList.toggle('hidden', t.info.id !== activeId);
   }
   document.getElementById('welcome')!.classList.toggle('hidden', tabs.size > 0);
-  const active = activeId ? tabs.get(activeId) : undefined;
-  if (active) {
-    active.fit.fit();
-    post({ type: 'resize', sessionId: active.info.id, cols: active.term.cols, rows: active.term.rows });
-    active.term.focus();
+  document.getElementById('btn-exit')!.classList.toggle('disabled', !act);
+  document.getElementById('btn-sessions')!.classList.toggle('disabled', tabs.size === 0);
+  const ov = document.getElementById('exit-overlay')!;
+  ov.classList.toggle('hidden', !(act && act.info.exited));
+  if (act && act.info.exited) {
+    ov.querySelector('.exit-code')!.textContent = act.info.exitCode === null ? '' : `exit ${act.info.exitCode}`;
+  }
+  hideMenu();
+  if (act && !act.info.exited) {
+    act.fit.fit();
+    post({ type: 'resize', sessionId: act.info.id, cols: act.term.cols, rows: act.term.rows });
+    act.term.focus();
   }
 }
 
@@ -146,6 +129,51 @@ function removeTab(id: string): void {
   t.term.dispose();
   t.el.remove();
   tabs.delete(id);
+}
+
+function renderMenu(): void {
+  const list = document.getElementById('session-list')!;
+  list.textContent = '';
+  for (const t of tabs.values()) {
+    const row = document.createElement('div');
+    row.className = 'menu-row' + (t.info.id === activeId ? ' current' : '');
+    const name = document.createElement('span');
+    name.className = 'menu-name';
+    name.textContent = label(t.info);
+    row.appendChild(name);
+    const x = document.createElement('span');
+    x.className = 'menu-x';
+    x.textContent = '×';
+    x.title = '关闭该会话';
+    x.onclick = (ev) => {
+      ev.stopPropagation();
+      post({ type: 'close', sessionId: t.info.id });
+      hideMenu();
+    };
+    row.appendChild(x);
+    row.onclick = () => {
+      if (t.info.exited) {
+        post({ type: 'restart', sessionId: t.info.id });
+      } else {
+        activeId = t.info.id;
+        renderChrome();
+        post({ type: 'switch', sessionId: t.info.id });
+      }
+    };
+    list.appendChild(row);
+  }
+  const resume = document.createElement('div');
+  resume.className = 'menu-row footer';
+  resume.textContent = '↺ 恢复历史会话 (omp -r)';
+  resume.onclick = () => {
+    post({ type: 'new', args: ['-r'] });
+    hideMenu();
+  };
+  list.appendChild(resume);
+}
+
+function hideMenu(): void {
+  document.getElementById('sessions-menu')!.classList.add('hidden');
 }
 
 window.addEventListener('message', (e: MessageEvent<WebviewMessage>) => {
@@ -167,12 +195,12 @@ window.addEventListener('message', (e: MessageEvent<WebviewMessage>) => {
         createTab(info, replay);
       }
       activeId = m.activeId ?? m.sessions[0]?.id ?? null;
-      renderTabs();
+      renderChrome();
       break;
     case 'created':
       createTab(m.session);
       activeId = m.session.id;
-      renderTabs();
+      renderChrome();
       break;
     case 'output': {
       const t = tabs.get(m.sessionId);
@@ -184,7 +212,9 @@ window.addEventListener('message', (e: MessageEvent<WebviewMessage>) => {
       if (t) {
         t.info.exited = true;
         t.info.exitCode = m.code;
-        renderTabs();
+        if (t.info.id === activeId) {
+          renderChrome();
+        }
       }
       break;
     }
@@ -193,7 +223,7 @@ window.addEventListener('message', (e: MessageEvent<WebviewMessage>) => {
       if (activeId === m.sessionId) {
         activeId = [...tabs.keys()].pop() ?? null;
       }
-      renderTabs();
+      renderChrome();
       break;
     case 'error':
       showError(m.message);
@@ -219,54 +249,111 @@ function showError(message: string): void {
 app.innerHTML = `
   <div id="error" class="hidden error">
     <p></p>
-    <button id="open-settings">Open Settings</button>
+    <button id="open-settings">打开设置</button>
   </div>
-  <div class="tabbar">
-    <span id="tabs-start"></span>
-    <button id="newtab" class="icon" title="New Session">＋</button>
-    <button id="resume" class="icon" title="Resume Session (omp -r)">↺</button>
+  <div class="toolbar">
+    <span id="session-title" class="title">Oh My Pi</span>
+    <span class="spacer"></span>
+    <button id="btn-sessions" class="tool" title="会话列表">☰</button>
+    <button id="btn-new" class="tool" title="新建会话">＋</button>
+    <button id="btn-exit" class="tool" title="退出当前会话">✕</button>
+  </div>
+  <div id="sessions-menu" class="hidden">
+    <div id="session-list"></div>
+  </div>
+  <div id="term-area">
+    <div id="exit-overlay" class="hidden">
+      <p>会话已退出 <span class="exit-code"></span></p>
+      <div class="row">
+        <button id="btn-restart">重新开始</button>
+        <button id="btn-dismiss">查看输出</button>
+      </div>
+      <p class="hint">会话记录保存在磁盘，可用「恢复历史会话」找回</p>
+    </div>
   </div>
   <div id="welcome" class="welcome">
-    <p>No omp sessions yet.</p>
-    <button id="welcome-new">New Session</button>
+    <svg width="56" height="56" viewBox="0 0 24 24"><path d="M4 5h16v2.5h-4.8V19h-2.4V7.5H9.2V19H6.8V7.5H4V5z" fill="currentColor"/></svg>
+    <h1>Oh My Pi</h1>
+    <p>在侧边栏运行 omp 会话</p>
+    <button id="welcome-new" class="primary">新建会话</button>
+    <button id="welcome-resume">↺ 恢复历史会话</button>
+    <p class="hint">工具栏 ✕ 退出会话 · ☰ 切换会话 · 面板内 Ctrl+P 切换模型</p>
   </div>
 `;
 
-document.getElementById('newtab')!.onclick = () => post({ type: 'new' });
+document.getElementById('btn-new')!.onclick = () => post({ type: 'new' });
 document.getElementById('welcome-new')!.onclick = () => post({ type: 'new' });
-document.getElementById('resume')!.onclick = () => post({ type: 'new', args: ['-r'] });
+document.getElementById('welcome-resume')!.onclick = () => post({ type: 'new', args: ['-r'] });
+document.getElementById('btn-exit')!.onclick = () => {
+  if (activeId) {
+    post({ type: 'close', sessionId: activeId });
+  }
+};
+document.getElementById('btn-restart')!.onclick = () => {
+  if (activeId) {
+    post({ type: 'restart', sessionId: activeId });
+  }
+};
+document.getElementById('btn-dismiss')!.onclick = () => {
+  document.getElementById('exit-overlay')!.classList.add('hidden');
+};
+document.getElementById('btn-sessions')!.onclick = () => {
+  const menu = document.getElementById('sessions-menu')!;
+  if (menu.classList.contains('hidden')) {
+    renderMenu();
+    menu.classList.remove('hidden');
+  } else {
+    hideMenu();
+  }
+};
 document.getElementById('open-settings')!.onclick = () => post({ type: 'openSettings' });
 
 document.addEventListener('focusin', () => post({ type: 'focus', value: true }));
 document.addEventListener('focusout', () => post({ type: 'focus', value: false }));
 
 const ro = new ResizeObserver(() => {
-  const t = activeId ? tabs.get(activeId) : undefined;
+  const t = activeTab();
   if (t && t.el.clientHeight > 0) {
     t.fit.fit();
     post({ type: 'resize', sessionId: t.info.id, cols: t.term.cols, rows: t.term.rows });
   }
 });
-ro.observe(app);
+ro.observe(document.getElementById('term-area')!);
 
 const style = document.createElement('style');
 style.textContent = `
   html, body, #app { height: 100%; margin: 0; padding: 0; }
   body { color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); }
-  #app { display: flex; flex-direction: column; }
-  .tabbar { display: flex; gap: 2px; padding: 2px 4px; align-items: center; flex-wrap: wrap; }
-  .tab { display: inline-flex; align-items: center; gap: 4px; }
-  .tab-label { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tab-close { padding: 0 2px; opacity: 0.7; }
-  .tab-close:hover { opacity: 1; color: var(--vscode-errorForeground); }
-  .tab.active { border-bottom: 1px solid var(--vscode-focusBorder); }
+  #app { display: flex; flex-direction: column; position: relative; }
+  .toolbar { display: flex; align-items: center; gap: 2px; padding: 3px 6px; min-height: 26px; }
+  .toolbar .title { font-size: 11px; opacity: 0.9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toolbar .spacer { flex: 1; }
   button { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; padding: 2px 8px; cursor: pointer; font-size: 11px; }
   button:hover { filter: brightness(1.15); }
-  button.icon { padding: 2px 6px; }
-  .term { flex: 1; min-height: 0; }
+  button.tool { padding: 1px 7px; font-size: 13px; line-height: 1; }
+  button.tool.disabled { opacity: 0.4; pointer-events: none; }
+  #sessions-menu { position: absolute; top: 30px; right: 6px; left: 6px; z-index: 30; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-widget-border); box-shadow: 0 2px 8px rgba(0,0,0,.4); max-height: 60%; overflow: auto; }
+  .menu-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+  .menu-row:hover { background: var(--vscode-list-hoverBackground); }
+  .menu-row.current { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+  .menu-row .menu-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .menu-row .menu-x { padding: 0 4px; opacity: .6; }
+  .menu-row .menu-x:hover { opacity: 1; color: var(--vscode-errorForeground); }
+  .menu-row.footer { border-top: 1px solid var(--vscode-widget-border); opacity: .9; }
+  #term-area { flex: 1; min-height: 0; position: relative; }
+  .term { position: absolute; inset: 0; }
   .term .xterm { height: 100%; padding: 2px 4px; box-sizing: border-box; }
+  #exit-overlay { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: color-mix(in srgb, var(--vscode-editor-background) 82%, transparent); }
+  #exit-overlay .row { display: flex; gap: 8px; }
+  #exit-overlay p { margin: 0; font-size: 12px; }
+  #exit-overlay .hint { opacity: .7; font-size: 11px; max-width: 80%; text-align: center; }
   .hidden { display: none !important; }
-  .welcome { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--vscode-descriptionForeground); }
+  .welcome h1 { font-size: 18px; margin: 8px 0 0 0; color: var(--vscode-editor-foreground); }
+  .welcome p { margin: 0; font-size: 12px; }
+  .welcome button { margin-top: 8px; min-width: 160px; }
+  .welcome button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+  .welcome .hint { margin-top: 18px; font-size: 11px; opacity: .7; max-width: 82%; text-align: center; }
   .error { margin: 8px; padding: 8px; border: 1px solid var(--vscode-inputValidation-errorBorder); }
   .error p { font-size: 11px; word-break: break-all; margin: 0 0 8px 0; }
 `;
