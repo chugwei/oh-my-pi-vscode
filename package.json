@@ -29,8 +29,13 @@
 			"omp-sidebar": [
 				{
 					"type": "webview",
+					"id": "omp.chatView",
+					"name": "Chat"
+				},
+				{
+					"type": "webview",
 					"id": "omp.sidebarTerminal",
-					"name": "Sessions"
+					"name": "Terminal"
 				}
 			]
 		},
@@ -124,6 +129,25 @@
 						"ctrl+p"
 					],
 					"description": "Keys forwarded to the omp terminal when the sidebar is focused. Only pre-declared chords (currently 'ctrl+p') take effect; others fall back to VS Code defaults."
+				},
+				"omp.chat.modePresets": {
+					"type": "object",
+					"default": {
+						"default": {
+							"model": "google-antigravity/claude-sonnet-4-5",
+							"thinking": "high"
+						},
+						"plan": {
+							"model": "google-antigravity/claude-opus-4-6",
+							"thinking": "max"
+						}
+					},
+					"description": "Presets for models and thinking levels when switching modes in Chat UI"
+				},
+				"omp.chat.defaultMode": {
+					"type": "string",
+					"default": "default",
+					"description": "Default mode for new chat sessions"
 				}
 			}
 		}
