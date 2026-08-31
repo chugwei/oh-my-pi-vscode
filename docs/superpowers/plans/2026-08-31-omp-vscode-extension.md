@@ -81,8 +81,8 @@
       ]
     },
     "keybindings": [
-      { "command": "omp-vscode.focus", "key": "ctrl+escape", "mac": "cmd+escape" },
-      { "command": "omp-vscode.openInEditor", "key": "ctrl+shift+escape", "mac": "cmd+shift+escape" },
+      { "command": "omp-vscode.focus", "key": "ctrl+alt+o", "mac": "cmd+alt+o" },
+      { "command": "omp-vscode.openInEditor", "key": "ctrl+alt+shift+o", "mac": "cmd+alt+shift+o" },
       {
         "command": "omp-vscode.forwardKey",
         "args": ["ctrl+p"],
@@ -1703,9 +1703,9 @@ Expected: 新 VS Code 窗口，活动栏出现 π 图标（Oh My Pi）。
 3. Ctrl+P 在面板聚焦时打开 omp 模型切换（而非 VS Code 快速打开）
 4. 再开第二个会话 → 标签切换正常，两会话进程独立
 5. `↺` → 出现 `omp (resume)` 标签，`-r` 选择器可用
-6. 关闭一个标签 → 仅该进程终止；`Ctrl+Escape` 回焦侧边栏
+6. 关闭一个标签 → 仅该进程终止；`Ctrl+Alt+O` 回焦侧边栏
 7. 折叠侧边栏再展开 → 会话仍在、缓冲未丢
-8. `Ctrl+Shift+Escape` → 编辑器区出现 omp 大窗终端
+8. `Ctrl+Alt+Shift+O` → 编辑器区出现 omp 大窗终端
 9. 退出会话进程（`/exit`）→ 标签显示 `[exited]`，点击标签 → 重启
 
 发现缺陷：修复后从 Step 2 重跑相关项。

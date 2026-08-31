@@ -46,8 +46,8 @@
       ]
     },
     "keybindings": [
-      { "command": "omp-vscode.focus", "key": "ctrl+escape", "mac": "cmd+escape" },
-      { "command": "omp-vscode.openInEditor", "key": "ctrl+shift+escape", "mac": "cmd+shift+escape" },
+      { "command": "omp-vscode.focus", "key": "ctrl+alt+o", "mac": "cmd+alt+o" },
+      { "command": "omp-vscode.openInEditor", "key": "ctrl+alt+shift+o", "mac": "cmd+alt+shift+o" },
       {
         "command": "omp-vscode.forwardKey",
         "args": ["ctrl+p"],
