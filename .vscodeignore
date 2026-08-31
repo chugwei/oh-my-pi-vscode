@@ -1,11 +1,14 @@
-.vscode/**
+.gitignore
+.vscode-test.mjs
 src/**
 test/**
 node_modules/@types/**
 node_modules/.bin/**
 node_modules/typescript/**
 node_modules/esbuild/**
-node_modules/tsx/**
+node_modules/@xterm/**
+node_modules/@vscode/test-cli/**
+node_modules/@vscode/test-electron/**
 esbuild.mjs
 tsconfig.json
 docs/**
