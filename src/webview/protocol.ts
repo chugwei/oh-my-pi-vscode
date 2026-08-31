@@ -27,8 +27,7 @@ export type HostMessage =
   | { type: 'switch'; sessionId: string }
   | { type: 'restart'; sessionId: string }
   | { type: 'focus'; value: boolean }
-  | { type: 'openSettings' }
-  | { type: 'key'; chord: string };
+  | { type: 'openSettings' };
 
 /** extension host -> webview */
 export type WebviewMessage =

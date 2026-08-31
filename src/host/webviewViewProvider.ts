@@ -65,9 +65,6 @@ export class OmpViewProvider implements vscode.WebviewViewProvider {
         case 'openSettings':
           void vscode.commands.executeCommand('workbench.action.openSettings', 'omp.executablePath');
           break;
-        case 'key':
-          // webview-originated key echo (reserved); chord forwarding lives in keyForwarder.ts
-          break;
       }
     } catch (e) {
       this.post({ type: 'error', message: e instanceof Error ? e.message : String(e) });

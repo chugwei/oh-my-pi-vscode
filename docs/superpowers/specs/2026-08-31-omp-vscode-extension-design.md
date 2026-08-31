@@ -101,7 +101,7 @@ host → webview：
 | `output` | `sessionId, data` | 终端输出增量 |
 | `exit` | `sessionId, code` | 进程退出 |
 | `created` | `session` | 新会话已建立 |
-| `config` | `fontFamily, scrollback, restartHint` | webview 就绪后下发设置（字体/回滚等） |
+| `config` | `fontFamily, scrollback` | webview 就绪后下发设置（字体/回滚等）；重启提示由 webview 原生 exited 标签交互承担，无需配置字段 |
 
 ### 4.3 Webview 资源
 
