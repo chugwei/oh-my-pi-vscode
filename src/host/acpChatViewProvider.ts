@@ -8,12 +8,13 @@ import type {
   ChatWebviewMessage,
   ChatMessageItem,
 } from '../webview/chatProtocol.js';
-import type { ContentBlock, RequestPermissionParams, ToolCallPayload } from './acp/types.js';
+import type { ConfigOption, ContentBlock, RequestPermissionParams, ToolCallPayload } from './acp/types.js';
 
 export class AcpChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = 'omp.chatView';
   private view?: vscode.WebviewView;
   private currentSessionId: string | null = null;
+  private currentConfigOptions: ConfigOption[] = [];
   private messages: ChatMessageItem[] = [];
   private pendingPermissions = new Map<string, (optionId: string | null) => void>();
 
@@ -91,7 +92,7 @@ export class AcpChatViewProvider implements vscode.WebviewViewProvider {
           if (!this.currentSessionId) {
             await this.createNewSession();
           } else {
-            await this.syncSessionState();
+            this.postSessionState();
           }
           break;
         }
@@ -106,41 +107,49 @@ export class AcpChatViewProvider implements vscode.WebviewViewProvider {
           break;
         }
         case 'loadSession': {
-          const res = await this.acp.loadSession(m.sessionId, this.getWorkspaceRoot());
-          this.currentSessionId = res.sessionId;
+          try {
+            const res = await this.acp.loadSession(m.sessionId, this.getWorkspaceRoot());
+            this.currentSessionId = res.sessionId;
+            if (res.configOptions && res.configOptions.length > 0) {
+              this.currentConfigOptions = res.configOptions;
+            }
+          } catch {
+            this.currentSessionId = m.sessionId;
+          }
           this.messages = [];
-          this.postMessage({
-            type: 'sessionState',
-            sessionId: res.sessionId,
-            configOptions: res.configOptions || [],
-            messages: this.messages,
-          });
+          this.postSessionState();
           break;
         }
         case 'setMode': {
           if (!this.currentSessionId) return;
-          await this.acp.setConfigOption(this.currentSessionId, 'mode', m.mode);
+          const res = await this.acp.setConfigOption(this.currentSessionId, 'mode', m.mode);
+          if (res.configOptions) this.currentConfigOptions = res.configOptions;
+
           // Apply Mode -> Model/Thinking preset
           const preset = this.presetResolver.getPresetForMode(m.mode);
           if (preset?.model) {
-            await this.acp.setConfigOption(this.currentSessionId, 'model', preset.model);
+            const mRes = await this.acp.setConfigOption(this.currentSessionId, 'model', preset.model);
+            if (mRes.configOptions) this.currentConfigOptions = mRes.configOptions;
           }
           if (preset?.thinking) {
-            await this.acp.setConfigOption(this.currentSessionId, 'thinking', preset.thinking);
+            const tRes = await this.acp.setConfigOption(this.currentSessionId, 'thinking', preset.thinking);
+            if (tRes.configOptions) this.currentConfigOptions = tRes.configOptions;
           }
-          await this.syncSessionState();
+          this.postSessionState();
           break;
         }
         case 'setThinking': {
           if (!this.currentSessionId) return;
-          await this.acp.setConfigOption(this.currentSessionId, 'thinking', m.thinking);
-          await this.syncSessionState();
+          const res = await this.acp.setConfigOption(this.currentSessionId, 'thinking', m.thinking);
+          if (res.configOptions) this.currentConfigOptions = res.configOptions;
+          this.postSessionState();
           break;
         }
         case 'setModel': {
           if (!this.currentSessionId) return;
-          await this.acp.setConfigOption(this.currentSessionId, 'model', m.model);
-          await this.syncSessionState();
+          const res = await this.acp.setConfigOption(this.currentSessionId, 'model', m.model);
+          if (res.configOptions) this.currentConfigOptions = res.configOptions;
+          this.postSessionState();
           break;
         }
         case 'prompt': {
@@ -207,27 +216,35 @@ export class AcpChatViewProvider implements vscode.WebviewViewProvider {
     const cwd = this.getWorkspaceRoot();
     const res = await this.acp.newSession(cwd);
     this.currentSessionId = res.sessionId;
+    this.currentConfigOptions = res.configOptions || [];
     this.messages = [];
 
     // Apply default mode presets
     const defaultMode = vscode.workspace.getConfiguration('omp.chat').get<string>('defaultMode', 'default');
     if (defaultMode !== 'default') {
-      await this.acp.setConfigOption(res.sessionId, 'mode', defaultMode);
+      const modeRes = await this.acp.setConfigOption(res.sessionId, 'mode', defaultMode);
+      if (modeRes.configOptions) this.currentConfigOptions = modeRes.configOptions;
+
       const preset = this.presetResolver.getPresetForMode(defaultMode);
-      if (preset?.model) await this.acp.setConfigOption(res.sessionId, 'model', preset.model);
-      if (preset?.thinking) await this.acp.setConfigOption(res.sessionId, 'thinking', preset.thinking);
+      if (preset?.model) {
+        const mRes = await this.acp.setConfigOption(res.sessionId, 'model', preset.model);
+        if (mRes.configOptions) this.currentConfigOptions = mRes.configOptions;
+      }
+      if (preset?.thinking) {
+        const tRes = await this.acp.setConfigOption(res.sessionId, 'thinking', preset.thinking);
+        if (tRes.configOptions) this.currentConfigOptions = tRes.configOptions;
+      }
     }
 
-    await this.syncSessionState();
+    this.postSessionState();
   }
 
-  private async syncSessionState(): Promise<void> {
+  private postSessionState(): void {
     if (!this.currentSessionId) return;
-    const loadRes = await this.acp.loadSession(this.currentSessionId, this.getWorkspaceRoot());
     this.postMessage({
       type: 'sessionState',
       sessionId: this.currentSessionId,
-      configOptions: loadRes.configOptions || [],
+      configOptions: this.currentConfigOptions,
       messages: this.messages,
     });
   }
@@ -243,6 +260,7 @@ export class AcpChatViewProvider implements vscode.WebviewViewProvider {
       canSelectMany: false,
       filters,
     });
+
     if (uris && uris[0]) {
       const fileUri = uris[0];
       const filePath = fileUri.fsPath;

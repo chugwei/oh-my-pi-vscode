@@ -15,7 +15,7 @@ const vscode = acquireVsCodeApi();
 
 // App State
 let sessionId = '';
-let configOptions: ConfigOption[] = [];
+
 let attachments: ChatAttachment[] = [];
 let isGenerating = false;
 let currentThinkingEl: HTMLDetailsElement | null = null;
@@ -27,28 +27,29 @@ function post(msg: ChatHostMessage): void {
   vscode.postMessage(msg);
 }
 
-// Render Main App Skeleton
+// Render Main App Skeleton (Claude Code 1:1 layout)
 app.innerHTML = `
   <div class="chat-container">
-    <!-- Header -->
+    <!-- Top Header -->
     <div class="chat-header">
-      <button id="btn-history" class="icon-btn" title="历史会话">≡ 历史</button>
-      <button id="btn-new" class="icon-btn" title="新建会话">＋ 新建</button>
+      <button id="btn-history" class="header-btn" title="历史会话">≡ 历史</button>
+      <button id="btn-new" class="header-btn" title="新建会话">＋ 新建</button>
       <div class="spacer"></div>
-      <span id="badge-mode" class="badge">Mode</span>
-      <span id="badge-model" class="badge">Model</span>
+      <span id="badge-mode" class="badge">Default</span>
+      <span id="badge-think" class="badge">High</span>
+      <span id="badge-model" class="badge">Sonnet</span>
     </div>
 
     <!-- History Drawer (hidden by default) -->
     <div id="history-drawer" class="drawer hidden">
       <div class="drawer-header">
         <span>历史会话</span>
-        <button id="btn-close-history" class="icon-btn">✕</button>
+        <button id="btn-close-history" class="header-btn">✕</button>
       </div>
       <div id="history-list" class="history-list"></div>
     </div>
 
-    <!-- Messages Flow -->
+    <!-- Messages Flow Area -->
     <div id="messages-flow" class="messages-flow">
       <div id="welcome-view" class="welcome-view">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
@@ -59,37 +60,53 @@ app.innerHTML = `
       </div>
     </div>
 
-    <!-- Bottom Input Area -->
+    <!-- Bottom Input Container (Exact Claude Code Box) -->
     <div class="input-area">
       <!-- Attachment Pills -->
       <div id="attachment-pills" class="attachment-pills hidden"></div>
 
-      <!-- Textarea Box -->
-      <div class="input-box">
-        <textarea id="prompt-input" rows="1" placeholder="发送消息给 Oh My Pi... (Shift+Enter 换行)"></textarea>
+      <!-- Claude-styled Box -->
+      <div class="claude-input-card">
+        <textarea id="prompt-input" rows="1" placeholder="ctrl+alt+o to focus or unfocus Oh My Pi"></textarea>
 
-        <!-- Input Toolbar -->
-        <div class="input-toolbar">
-          <div class="left-tools">
-            <button id="btn-attach" class="tool-btn" title="添加文件或图片">＋</button>
+        <!-- Bottom Toolbar inside the box -->
+        <div class="claude-toolbar">
+          <!-- Left side icons: + and [/] -->
+          <div class="left-actions">
+            <button id="btn-attach" class="action-btn" title="添加文件或图片">＋</button>
+            <button id="btn-slash" class="action-btn slash-btn" title="快捷命令">[/]</button>
+          </div>
+
+          <!-- Right side selectors: Mode, Think, Model, and Send ↑ -->
+          <div class="right-actions">
             <div class="popover-wrapper">
-              <button id="btn-mode" class="tool-btn select-btn">⚡ 模式▾</button>
+              <button id="btn-mode" class="pill-selector" title="选择模式">⚡ Mode▾</button>
               <div id="popover-mode" class="popover hidden"></div>
             </div>
+
             <div class="popover-wrapper">
-              <button id="btn-think" class="tool-btn select-btn">🧠 思考▾</button>
+              <button id="btn-think" class="pill-selector" title="思考强度">🧠 Think▾</button>
               <div id="popover-think" class="popover hidden"></div>
             </div>
+
             <div class="popover-wrapper">
-              <button id="btn-model" class="tool-btn select-btn">🤖 模型▾</button>
+              <button id="btn-model" class="pill-selector" title="选择模型">🤖 Model▾</button>
               <div id="popover-model" class="popover model-popover hidden">
-                <input type="text" id="model-search" placeholder="搜索模型..." />
+                <input type="text" id="model-search" placeholder="搜索 200+ 模型..." />
                 <div id="model-list" class="popover-list"></div>
               </div>
             </div>
-          </div>
-          <div class="right-tools">
-            <button id="btn-send" class="send-btn" title="发送 (Enter)">➤</button>
+
+            <!-- Slash commands popover -->
+            <div id="popover-slash" class="popover slash-popover hidden">
+              <div class="popover-item" data-cmd="/clear"><span class="item-name">/clear</span><span class="item-desc">清空当前消息</span></div>
+              <div class="popover-item" data-cmd="/plan"><span class="item-name">/plan</span><span class="item-desc">切换至 Plan 规划模式</span></div>
+              <div class="popover-item" data-cmd="/default"><span class="item-name">/default</span><span class="item-desc">切换至 Default 编程模式</span></div>
+              <div class="popover-item" data-cmd="/help"><span class="item-name">/help</span><span class="item-desc">查看帮助与说明</span></div>
+            </div>
+
+            <!-- Orange Send Button with Up Arrow -->
+            <button id="btn-send" class="send-arrow-btn" title="发送 (Enter)">↑</button>
           </div>
         </div>
       </div>
@@ -107,7 +124,7 @@ const welcomeView = document.getElementById('welcome-view')!;
 // Auto-grow textarea
 promptInput.addEventListener('input', () => {
   promptInput.style.height = 'auto';
-  promptInput.style.height = Math.min(promptInput.scrollHeight, 200) + 'px';
+  promptInput.style.height = Math.min(promptInput.scrollHeight, 180) + 'px';
 });
 
 // Send handler
@@ -116,6 +133,24 @@ function handleSend(): void {
   if (!text && attachments.length === 0) return;
   if (isGenerating) {
     post({ type: 'cancel' });
+    return;
+  }
+
+  // Handle client-side slash commands
+  if (text === '/clear') {
+    messagesFlow.innerHTML = '';
+    messagesFlow.appendChild(welcomeView);
+    welcomeView.classList.remove('hidden');
+    promptInput.value = '';
+    promptInput.style.height = 'auto';
+    return;
+  } else if (text === '/plan') {
+    post({ type: 'setMode', mode: 'plan' });
+    promptInput.value = '';
+    return;
+  } else if (text === '/default') {
+    post({ type: 'setMode', mode: 'default' });
+    promptInput.value = '';
     return;
   }
 
@@ -145,7 +180,7 @@ btnSend.onclick = handleSend;
 
 function setGenerating(generating: boolean): void {
   isGenerating = generating;
-  btnSend.textContent = generating ? '◼' : '➤';
+  btnSend.textContent = generating ? '◼' : '↑';
   btnSend.classList.toggle('stop-btn', generating);
 }
 
@@ -301,7 +336,58 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Popover Handlers
+// Popovers
+const popoverMode = document.getElementById('popover-mode')!;
+const popoverThink = document.getElementById('popover-think')!;
+const popoverModel = document.getElementById('popover-model')!;
+const popoverSlash = document.getElementById('popover-slash')!;
+const btnMode = document.getElementById('btn-mode')!;
+const btnThink = document.getElementById('btn-think')!;
+const btnModel = document.getElementById('btn-model')!;
+const btnSlash = document.getElementById('btn-slash')!;
+
+function closeAllPopoversExcept(except?: HTMLElement): void {
+  [popoverMode, popoverThink, popoverModel, popoverSlash].forEach((p) => {
+    if (p !== except) p.classList.add('hidden');
+  });
+}
+
+btnMode.onclick = () => {
+  const isHidden = popoverMode.classList.contains('hidden');
+  closeAllPopoversExcept();
+  if (isHidden) popoverMode.classList.remove('hidden');
+};
+
+btnThink.onclick = () => {
+  const isHidden = popoverThink.classList.contains('hidden');
+  closeAllPopoversExcept();
+  if (isHidden) popoverThink.classList.remove('hidden');
+};
+
+btnModel.onclick = () => {
+  const isHidden = popoverModel.classList.contains('hidden');
+  closeAllPopoversExcept();
+  if (isHidden) {
+    popoverModel.classList.remove('hidden');
+    (document.getElementById('model-search') as HTMLInputElement).focus();
+  }
+};
+
+btnSlash.onclick = () => {
+  const isHidden = popoverSlash.classList.contains('hidden');
+  closeAllPopoversExcept();
+  if (isHidden) popoverSlash.classList.remove('hidden');
+};
+
+popoverSlash.querySelectorAll('.popover-item').forEach((item) => {
+  (item as HTMLElement).onclick = () => {
+    const cmd = item.getAttribute('data-cmd')!;
+    promptInput.value = cmd;
+    popoverSlash.classList.add('hidden');
+    handleSend();
+  };
+});
+
 document.getElementById('btn-attach')!.onclick = () => {
   post({ type: 'pickAttachment', kind: 'file' });
 };
@@ -315,117 +401,108 @@ document.getElementById('btn-new')!.onclick = () => {
   post({ type: 'newSession' });
 };
 
-// Mode Popover
-const btnMode = document.getElementById('btn-mode')!;
-const popoverMode = document.getElementById('popover-mode')!;
-btnMode.onclick = () => {
-  closeAllPopoversExcept(popoverMode);
-  popoverMode.classList.toggle('hidden');
-};
+// Render Config Popovers
+function renderConfigOptions(options: ConfigOption[]): void {
 
-function renderModePopover(modeOpt: ConfigOption): void {
-  btnMode.textContent = `⚡ ${modeOpt.options?.find((o) => o.value === modeOpt.currentValue)?.name || modeOpt.currentValue}▾`;
-  document.getElementById('badge-mode')!.textContent = String(modeOpt.currentValue);
-  popoverMode.innerHTML = (modeOpt.options || [])
-    .map(
-      (o) => `
-    <div class="popover-item ${o.value === modeOpt.currentValue ? 'active' : ''}" data-val="${o.value}">
-      <div class="item-name">${escapeHtml(o.name)}</div>
-      ${o.description ? `<div class="item-desc">${escapeHtml(o.description)}</div>` : ''}
-    </div>
-  `
-    )
-    .join('');
+  // 1. Mode Option
+  const modeOpt = options.find((x) => x.id === 'mode');
+  if (modeOpt) {
+    const curr = String(modeOpt.currentValue);
+    const currName = modeOpt.options?.find((o) => o.value === curr)?.name || curr;
+    btnMode.textContent = `⚡ ${currName}▾`;
+    document.getElementById('badge-mode')!.textContent = currName;
 
-  popoverMode.querySelectorAll('.popover-item').forEach((item) => {
-    (item as HTMLElement).onclick = () => {
-      const val = item.getAttribute('data-val')!;
-      post({ type: 'setMode', mode: val });
-      popoverMode.classList.add('hidden');
-    };
-  });
-}
-
-// Think Popover
-const btnThink = document.getElementById('btn-think')!;
-const popoverThink = document.getElementById('popover-think')!;
-btnThink.onclick = () => {
-  closeAllPopoversExcept(popoverThink);
-  popoverThink.classList.toggle('hidden');
-};
-
-function renderThinkPopover(thinkOpt: ConfigOption): void {
-  btnThink.textContent = `🧠 ${thinkOpt.currentValue}▾`;
-  popoverThink.innerHTML = (thinkOpt.options || [])
-    .map(
-      (o) => `
-    <div class="popover-item ${o.value === thinkOpt.currentValue ? 'active' : ''}" data-val="${o.value}">
-      <div class="item-name">${escapeHtml(o.name || o.value)}</div>
-    </div>
-  `
-    )
-    .join('');
-
-  popoverThink.querySelectorAll('.popover-item').forEach((item) => {
-    (item as HTMLElement).onclick = () => {
-      const val = item.getAttribute('data-val')!;
-      post({ type: 'setThinking', thinking: val });
-      popoverThink.classList.add('hidden');
-    };
-  });
-}
-
-// Model Popover
-const btnModel = document.getElementById('btn-model')!;
-const popoverModel = document.getElementById('popover-model')!;
-const modelList = document.getElementById('model-list')!;
-const modelSearch = document.getElementById('model-search') as HTMLInputElement;
-
-btnModel.onclick = () => {
-  closeAllPopoversExcept(popoverModel);
-  popoverModel.classList.toggle('hidden');
-  modelSearch.focus();
-};
-
-function renderModelPopover(modelOpt: ConfigOption): void {
-  const curr = String(modelOpt.currentValue);
-  const shortName = curr.split('/').pop() || curr;
-  btnModel.textContent = `🤖 ${shortName}▾`;
-  document.getElementById('badge-model')!.textContent = shortName;
-
-  const renderList = (filterText = '') => {
-    const filtered = (modelOpt.options || []).filter(
-      (o) => o.name.toLowerCase().includes(filterText) || o.value.toLowerCase().includes(filterText)
-    );
-    modelList.innerHTML = filtered
-      .slice(0, 50)
+    popoverMode.innerHTML = (modeOpt.options || [])
       .map(
         (o) => `
-      <div class="popover-item ${o.value === modelOpt.currentValue ? 'active' : ''}" data-val="${o.value}">
+      <div class="popover-item ${o.value === curr ? 'active' : ''}" data-val="${o.value}">
         <div class="item-name">${escapeHtml(o.name)}</div>
-        <div class="item-desc">${escapeHtml(o.value)}</div>
+        ${o.description ? `<div class="item-desc">${escapeHtml(o.description)}</div>` : ''}
       </div>
     `
       )
       .join('');
 
-    modelList.querySelectorAll('.popover-item').forEach((item) => {
+    popoverMode.querySelectorAll('.popover-item').forEach((item) => {
       (item as HTMLElement).onclick = () => {
         const val = item.getAttribute('data-val')!;
-        post({ type: 'setModel', model: val });
-        popoverModel.classList.add('hidden');
+        post({ type: 'setMode', mode: val });
+        popoverMode.classList.add('hidden');
       };
     });
-  };
+  }
 
-  renderList();
-  modelSearch.oninput = () => renderList(modelSearch.value.trim().toLowerCase());
-}
+  // 2. Thinking Option
+  const thinkOpt = options.find((x) => x.id === 'thinking');
+  if (thinkOpt) {
+    const curr = String(thinkOpt.currentValue);
+    btnThink.textContent = `🧠 ${curr}▾`;
+    document.getElementById('badge-think')!.textContent = curr;
 
-function closeAllPopoversExcept(except?: HTMLElement): void {
-  [popoverMode, popoverThink, popoverModel].forEach((p) => {
-    if (p !== except) p.classList.add('hidden');
-  });
+    popoverThink.innerHTML = (thinkOpt.options || [
+      { value: 'off', name: 'Off' },
+      { value: 'auto', name: 'Auto' },
+      { value: 'low', name: 'Low' },
+      { value: 'high', name: 'High' },
+      { value: 'max', name: 'Max' },
+    ])
+      .map(
+        (o) => `
+      <div class="popover-item ${o.value === curr ? 'active' : ''}" data-val="${o.value}">
+        <div class="item-name">${escapeHtml(o.name || o.value)}</div>
+      </div>
+    `
+      )
+      .join('');
+
+    popoverThink.querySelectorAll('.popover-item').forEach((item) => {
+      (item as HTMLElement).onclick = () => {
+        const val = item.getAttribute('data-val')!;
+        post({ type: 'setThinking', thinking: val });
+        popoverThink.classList.add('hidden');
+      };
+    });
+  }
+
+  // 3. Model Option
+  const modelOpt = options.find((x) => x.id === 'model');
+  if (modelOpt) {
+    const curr = String(modelOpt.currentValue);
+    const shortName = curr.split('/').pop() || curr;
+    btnModel.textContent = `🤖 ${shortName}▾`;
+    document.getElementById('badge-model')!.textContent = shortName;
+
+    const modelListEl = document.getElementById('model-list')!;
+    const searchInput = document.getElementById('model-search') as HTMLInputElement;
+
+    const renderList = (filterText = '') => {
+      const filtered = (modelOpt.options || []).filter(
+        (o) => o.name.toLowerCase().includes(filterText) || o.value.toLowerCase().includes(filterText)
+      );
+      modelListEl.innerHTML = filtered
+        .slice(0, 60)
+        .map(
+          (o) => `
+        <div class="popover-item ${o.value === curr ? 'active' : ''}" data-val="${o.value}">
+          <div class="item-name">${escapeHtml(o.name)}</div>
+          <div class="item-desc">${escapeHtml(o.value)}</div>
+        </div>
+      `
+        )
+        .join('');
+
+      modelListEl.querySelectorAll('.popover-item').forEach((item) => {
+        (item as HTMLElement).onclick = () => {
+          const val = item.getAttribute('data-val')!;
+          post({ type: 'setModel', model: val });
+          popoverModel.classList.add('hidden');
+        };
+      });
+    };
+
+    renderList();
+    searchInput.oninput = () => renderList(searchInput.value.trim().toLowerCase());
+  }
 }
 
 // History Drawer
@@ -446,13 +523,9 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
   switch (m.type) {
     case 'sessionState': {
       sessionId = m.sessionId;
-      configOptions = m.configOptions;
-      const modeOpt = configOptions.find((x) => x.id === 'mode');
-      if (modeOpt) renderModePopover(modeOpt);
-      const thinkOpt = configOptions.find((x) => x.id === 'thinking');
-      if (thinkOpt) renderThinkPopover(thinkOpt);
-      const modelOpt = configOptions.find((x) => x.id === 'model');
-      if (modelOpt) renderModelPopover(modelOpt);
+      if (m.configOptions && m.configOptions.length > 0) {
+        renderConfigOptions(m.configOptions);
+      }
       break;
     }
     case 'thoughtChunk': {
@@ -518,18 +591,19 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
   }
 });
 
-// Styles
+// Styles (Claude Code 1:1 Palette & Box)
 const style = document.createElement('style');
 style.textContent = `
   * { box-sizing: border-box; }
   html, body, #app { height: 100%; margin: 0; padding: 0; font-family: var(--vscode-font-family); color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); }
   .chat-container { display: flex; flex-direction: column; height: 100%; position: relative; }
+  
   .chat-header { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--vscode-widget-border); min-height: 32px; }
   .spacer { flex: 1; }
-  .icon-btn { background: transparent; border: none; color: var(--vscode-foreground); cursor: pointer; padding: 2px 6px; font-size: 11px; border-radius: 3px; }
-  .icon-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
-  .badge { font-size: 10px; padding: 1px 5px; border-radius: 10px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
-  
+  .header-btn { background: transparent; border: none; color: var(--vscode-foreground); cursor: pointer; padding: 2px 6px; font-size: 11px; border-radius: 4px; }
+  .header-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
+  .badge { font-size: 10px; padding: 2px 6px; border-radius: 10px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+
   .drawer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 50; background: var(--vscode-editor-background); display: flex; flex-direction: column; }
   .drawer-header { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--vscode-widget-border); font-weight: bold; }
   .history-list { flex: 1; overflow-y: auto; padding: 8px; }
@@ -565,36 +639,165 @@ style.textContent = `
   .perm-btn { padding: 3px 8px; font-size: 11px; border-radius: 3px; border: none; cursor: pointer; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
   .perm-btn.opt-allow_once, .perm-btn.opt-allow_always { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 
-  .input-area { padding: 8px 10px; border-top: 1px solid var(--vscode-widget-border); background: var(--vscode-editor-background); }
+  /* Input Area (Claude Code 1:1 Box) */
+  .input-area { padding: 8px 10px; background: var(--vscode-editor-background); }
   .attachment-pills { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
   .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 6px; border-radius: 12px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   .pill-remove { background: transparent; border: none; color: inherit; cursor: pointer; padding: 0 2px; }
-  
-  .input-box { border: 1px solid var(--vscode-input-border); border-radius: 8px; background: var(--vscode-input-background); padding: 6px; display: flex; flex-direction: column; }
-  .input-box:focus-within { border-color: var(--vscode-focusBorder); }
-  #prompt-input { background: transparent; border: none; outline: none; color: var(--vscode-input-foreground); font-family: inherit; font-size: 13px; resize: none; width: 100%; min-height: 24px; }
 
-  .input-toolbar { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
-  .left-tools { display: flex; gap: 4px; align-items: center; }
-  .tool-btn { background: transparent; border: none; color: var(--vscode-foreground); cursor: pointer; padding: 2px 6px; font-size: 11px; border-radius: 4px; opacity: 0.85; }
-  .tool-btn:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
-  .select-btn { border: 1px solid var(--vscode-widget-border); }
+  .claude-input-card {
+    border: 1px solid var(--vscode-input-border, #3c3c3c);
+    border-radius: 8px;
+    background: var(--vscode-input-background, #252526);
+    padding: 8px 10px 6px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .claude-input-card:focus-within {
+    border-color: var(--vscode-focusBorder, #007acc);
+  }
 
+  #prompt-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--vscode-input-foreground);
+    font-family: inherit;
+    font-size: 13px;
+    resize: none;
+    width: 100%;
+    min-height: 28px;
+    line-height: 1.4;
+  }
+  #prompt-input::placeholder {
+    color: var(--vscode-input-placeholderForeground, rgba(255,255,255,0.4));
+  }
+
+  .claude-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+    padding-top: 4px;
+  }
+
+  .left-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .action-btn {
+    background: transparent;
+    border: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    padding: 3px 6px;
+    font-size: 14px;
+    border-radius: 4px;
+    opacity: 0.8;
+  }
+  .action-btn:hover {
+    background: var(--vscode-toolbar-hoverBackground);
+    opacity: 1;
+  }
+  .slash-btn {
+    font-family: monospace;
+    font-size: 12px;
+    font-weight: bold;
+    border: 1px solid var(--vscode-widget-border, rgba(255,255,255,0.15));
+    padding: 1px 5px;
+  }
+
+  .right-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    position: relative;
+  }
+
+  .pill-selector {
+    background: transparent;
+    border: 1px solid var(--vscode-widget-border, rgba(255,255,255,0.15));
+    color: var(--vscode-foreground);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 11px;
+    cursor: pointer;
+    opacity: 0.85;
+  }
+  .pill-selector:hover {
+    background: var(--vscode-toolbar-hoverBackground);
+    opacity: 1;
+  }
+
+  .send-arrow-btn {
+    background: #c15c25;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    width: 26px;
+    height: 26px;
+    font-size: 14px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+  }
+  .send-arrow-btn:hover {
+    filter: brightness(1.15);
+  }
+  .send-arrow-btn.stop-btn {
+    background: #d32f2f;
+  }
+
+  /* Popovers */
   .popover-wrapper { position: relative; }
-  .popover { position: absolute; bottom: 28px; left: 0; z-index: 40; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-widget-border); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); min-width: 140px; max-height: 220px; overflow-y: auto; padding: 4px; }
-  .popover-item { padding: 4px 8px; font-size: 11px; border-radius: 3px; cursor: pointer; }
-  .popover-item:hover { background: var(--vscode-list-hoverBackground); }
-  .popover-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+  .popover {
+    position: absolute;
+    bottom: 32px;
+    right: 0;
+    z-index: 50;
+    background: var(--vscode-editorWidget-background, #252526);
+    border: 1px solid var(--vscode-widget-border, #454545);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    min-width: 150px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .popover-item {
+    padding: 5px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .popover-item:hover {
+    background: var(--vscode-list-hoverBackground);
+  }
+  .popover-item.active {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+  }
   .item-desc { font-size: 10px; opacity: 0.65; }
 
-  .model-popover { min-width: 220px; max-height: 260px; display: flex; flex-direction: column; }
-  #model-search { padding: 4px 6px; font-size: 11px; margin-bottom: 4px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 3px; }
+  .slash-popover { left: 0; right: auto; min-width: 180px; }
+  .model-popover { min-width: 240px; max-height: 280px; display: flex; flex-direction: column; }
+  #model-search {
+    padding: 4px 8px;
+    font-size: 11px;
+    margin-bottom: 4px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 4px;
+  }
   .popover-list { flex: 1; overflow-y: auto; }
 
-  .send-btn { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 12px; }
-  .send-btn:hover { background: var(--vscode-button-hoverBackground); }
-  .send-btn.stop-btn { background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-inputValidation-errorForeground); }
-  
   .error-card { color: var(--vscode-errorForeground); padding: 6px; font-size: 12px; }
   .hidden { display: none !important; }
 `;
