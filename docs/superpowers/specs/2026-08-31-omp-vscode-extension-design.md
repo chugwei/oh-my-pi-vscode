@@ -85,7 +85,7 @@ webview → host：
 | type | 字段 | 说明 |
 |---|---|---|
 | `ready` | — | webview 初始化完成，host 下发会话快照 |
-| `new` | — | 新建会话 |
+| `new` | `args?: string[]` | 新建会话（恢复时传 `["-r"]`，其余走 `omp.defaultArgs`） |
 | `input` | `sessionId, data: string` | 终端按键输入 |
 | `resize` | `sessionId, cols, rows` | 尺寸变化 |
 | `close` | `sessionId` | 关闭某会话 |
@@ -145,5 +145,5 @@ host → webview：
 ## 9. 测试与验证
 
 1. **单元测试**（node 直跑，无需 VS Code）：`sessionManager` 用注入的假 ptyFactory 验证：新建/关闭/重启、消息路由到正确会话、环形缓冲重放、exit 事件、resize 传递
-2. **集成 smoke**（`@vscode/test-cli` 起 Extension Development Host）：执行 `omp.newSession` 命令 → 断言 pty 进程创建且 webview 通道收到 `created`/`output` 消息；执行 `omp.openInEditor` → 断言终端创建
+2. **集成 smoke**（`@vscode/test-cli` 起 Extension Development Host）：执行 `omp.newSession` 命令 → 断言 `sessionManager` 建立会话并产生输出事件（不依赖侧边栏 webview 是否渲染）；执行 `omp.openInEditor` → 断言终端创建
 3. **手动验收**（最终标准）：开发宿主中侧边栏开新会话 → TUI 完整渲染、可对话、Ctrl+P 透传、多标签并行、关闭/重启、隐藏侧边栏后回来会话仍在
