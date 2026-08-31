@@ -71,4 +71,5 @@ export type ChatWebviewMessage =
     }
   | { type: 'promptDone'; stopReason?: string; usage?: { totalTokens?: number; cost?: number } }
   | { type: 'attachmentPicked'; attachment: ChatAttachment }
+  | { type: 'availableCommands'; commands: Array<{ name: string; description: string; input?: { hint?: string } }> }
   | { type: 'error'; message: string };

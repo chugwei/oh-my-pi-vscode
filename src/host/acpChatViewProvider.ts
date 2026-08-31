@@ -51,6 +51,11 @@ export class AcpChatViewProvider implements vscode.WebviewViewProvider {
           status: update.status,
           rawOutput: update.rawOutput,
         });
+      } else if (update.sessionUpdate === 'available_commands_update') {
+        this.postMessage({
+          type: 'availableCommands',
+          commands: update.availableCommands || [],
+        });
       }
     });
 

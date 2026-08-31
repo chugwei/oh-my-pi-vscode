@@ -16,12 +16,29 @@ const vscode = acquireVsCodeApi();
 
 // App State
 let sessionId = '';
-
 let attachments: ChatAttachment[] = [];
 let isGenerating = false;
 let currentThinkingEl: HTMLElement | null = null;
 let currentMessageEl: HTMLElement | null = null;
 let thoughtTextBuf = '';
+let serverCommands: Array<{ name: string; description: string }> = [];
+
+const BUILTIN_SLASH_COMMANDS: Array<{ cmd: string; desc: string }> = [
+  { cmd: '/clear', desc: '清空当前会话消息与上下文' },
+  { cmd: '/plan', desc: '切换至 Plan 架构规划模式' },
+  { cmd: '/default', desc: '切换至 Default 正常编程模式' },
+  { cmd: '/compact', desc: '压缩当前会话上下文 (节省 Token)' },
+  { cmd: '/model', desc: '打开模型与角色切换面板' },
+  { cmd: '/think', desc: '调整思考与推理强度 (Off/Auto/High/Max)' },
+  { cmd: '/security', desc: '执行 OMP 项目安全审计与漏洞扫描' },
+  { cmd: '/init', desc: '初始化项目配置与上下文规则' },
+  { cmd: '/git', desc: '打开交互式 Git 版本管理' },
+  { cmd: '/commit', desc: '智能分析差异并生成 Git 提交信息' },
+  { cmd: '/export', desc: '导出当前会话为 HTML / Markdown' },
+  { cmd: '/share', desc: '生成加密的会话在线分享链接' },
+  { cmd: '/cost', desc: '查看当前会话 Token 消耗与成本统计' },
+  { cmd: '/help', desc: '查看完整帮助指南与快捷键列表' },
+];
 
 const app = document.getElementById('app')!;
 
@@ -85,10 +102,14 @@ app.innerHTML = `
 
         <!-- Bottom Toolbar inside the box -->
         <div class="claude-toolbar">
-          <!-- Left side icons: + and [/] -->
+          <!-- Left side vector icons: + and [/] -->
           <div class="left-actions">
-            <button id="btn-attach" class="action-btn" title="添加文件或图片">＋</button>
-            <button id="btn-slash" class="action-btn slash-btn" title="快捷命令">[/]</button>
+            <button id="btn-attach" class="action-btn" title="添加文件或图片">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <button id="btn-slash" class="action-btn slash-btn" title="快捷斜杠命令 (/)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8.5 17L15.5 7"/></svg>
+            </button>
           </div>
 
           <!-- Right side selectors: Role/Model, Mode, Think, and Send ↑ -->
@@ -117,12 +138,10 @@ app.innerHTML = `
               <div id="popover-think" class="popover hidden"></div>
             </div>
 
-            <!-- Slash commands popover -->
+            <!-- Rich Slash commands popover -->
             <div id="popover-slash" class="popover slash-popover hidden">
-              <div class="popover-item" data-cmd="/clear"><span class="item-name">/clear</span><span class="item-desc">清空当前会话消息</span></div>
-              <div class="popover-item" data-cmd="/plan"><span class="item-name">/plan</span><span class="item-desc">切换至 Plan 规划模式</span></div>
-              <div class="popover-item" data-cmd="/default"><span class="item-name">/default</span><span class="item-desc">切换至 Default 编程模式</span></div>
-              <div class="popover-item" data-cmd="/help"><span class="item-name">/help</span><span class="item-desc">帮助与使用说明</span></div>
+              <input type="text" id="slash-search" placeholder="搜索斜杠命令 (/)..." />
+              <div id="slash-list" class="slash-list"></div>
             </div>
 
             <!-- Orange Send Button with Up Arrow -->
@@ -170,6 +189,16 @@ function handleSend(): void {
     return;
   } else if (text === '/default') {
     post({ type: 'setMode', mode: 'default' });
+    promptInput.value = '';
+    return;
+  } else if (text === '/model') {
+    closeAllPopoversExcept(popoverRole);
+    popoverRole.classList.remove('hidden');
+    promptInput.value = '';
+    return;
+  } else if (text === '/think') {
+    closeAllPopoversExcept(popoverThink);
+    popoverThink.classList.remove('hidden');
     promptInput.value = '';
     return;
   }
@@ -272,7 +301,7 @@ function appendMessageChunk(text: string): void {
   }
 
   // Check for 429 rate limit error in response
-  if (text.includes('rate_limit_error') || text.includes('429') && text.includes('error')) {
+  if (text.includes('rate_limit_error') || (text.includes('429') && text.includes('error'))) {
     renderRateLimitCard(text);
     return;
   }
@@ -444,17 +473,53 @@ btnThink.onclick = () => {
 btnSlash.onclick = () => {
   const isHidden = popoverSlash.classList.contains('hidden');
   closeAllPopoversExcept();
-  if (isHidden) popoverSlash.classList.remove('hidden');
+  if (isHidden) {
+    popoverSlash.classList.remove('hidden');
+    renderSlashCommandsList();
+    (document.getElementById('slash-search') as HTMLInputElement).focus();
+  }
 };
 
-popoverSlash.querySelectorAll('.popover-item').forEach((item) => {
-  (item as HTMLElement).onclick = () => {
-    const cmd = item.getAttribute('data-cmd')!;
-    promptInput.value = cmd;
-    popoverSlash.classList.add('hidden');
-    handleSend();
-  };
-});
+// Render Slash Commands List with Search
+function renderSlashCommandsList(filterText = ''): void {
+  const slashListEl = document.getElementById('slash-list')!;
+  const allCmds: Array<{ cmd: string; desc: string }> = [...BUILTIN_SLASH_COMMANDS];
+
+  // Merge dynamic commands from server
+  for (const sc of serverCommands) {
+    const prefixed = sc.name.startsWith('/') ? sc.name : `/${sc.name}`;
+    if (!allCmds.some((c) => c.cmd === prefixed)) {
+      allCmds.push({ cmd: prefixed, desc: sc.description });
+    }
+  }
+
+  const filtered = allCmds.filter(
+    (c) => c.cmd.toLowerCase().includes(filterText) || c.desc.toLowerCase().includes(filterText)
+  );
+
+  slashListEl.innerHTML = filtered
+    .map(
+      (c) => `
+    <div class="popover-item slash-item" data-cmd="${escapeHtml(c.cmd)}">
+      <span class="slash-cmd">${escapeHtml(c.cmd)}</span>
+      <span class="slash-desc">${escapeHtml(c.desc)}</span>
+    </div>
+  `
+    )
+    .join('');
+
+  slashListEl.querySelectorAll('.slash-item').forEach((item) => {
+    (item as HTMLElement).onclick = () => {
+      const cmd = item.getAttribute('data-cmd')!;
+      promptInput.value = cmd;
+      popoverSlash.classList.add('hidden');
+      handleSend();
+    };
+  });
+}
+
+const slashSearch = document.getElementById('slash-search') as HTMLInputElement;
+slashSearch.oninput = () => renderSlashCommandsList(slashSearch.value.trim().toLowerCase());
 
 document.getElementById('btn-attach')!.onclick = () => {
   post({ type: 'pickAttachment', kind: 'file' });
@@ -480,7 +545,6 @@ document.getElementById('btn-toggle-all-models')!.onclick = () => {
 
 // Render Roles & Config
 function renderRolesList(roles: UserRoleItem[], currentActive: string): void {
-
   const activeRole = roles.find((r) => r.id === currentActive) || roles[0];
 
   if (activeRole) {
@@ -531,8 +595,6 @@ function renderRolesList(roles: UserRoleItem[], currentActive: string): void {
 
 // Render Config Popovers
 function renderConfigOptions(options: ConfigOption[]): void {
-
-
   // 1. Mode Option
   const modeOpt = options.find((x) => x.id === 'mode');
   if (modeOpt) {
@@ -665,6 +727,10 @@ window.addEventListener('message', (e: MessageEvent<ChatWebviewMessage>) => {
       if (m.configOptions && m.configOptions.length > 0) {
         renderConfigOptions(m.configOptions);
       }
+      break;
+    }
+    case 'availableCommands': {
+      serverCommands = m.commands || [];
       break;
     }
     case 'thoughtChunk': {
@@ -902,20 +968,31 @@ style.textContent = `
     padding-top: 4px;
   }
 
-  .left-actions { display: flex; gap: 4px; align-items: center; }
+  .left-actions { display: flex; gap: 6px; align-items: center; }
 
+  /* Crisp Vector Action Buttons */
   .action-btn {
-    background: transparent;
-    border: none;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: var(--vscode-foreground);
     cursor: pointer;
-    padding: 3px 6px;
-    font-size: 14px;
-    border-radius: 4px;
-    opacity: 0.8;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.15s ease;
   }
-  .action-btn:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
-  .slash-btn { font-family: monospace; font-size: 12px; font-weight: bold; border: 1px solid var(--vscode-widget-border, rgba(255,255,255,0.15)); padding: 1px 5px; }
+  .action-btn:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.12));
+    border-color: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+  }
+  .action-btn:active {
+    transform: translateY(0);
+  }
 
   .right-actions { display: flex; gap: 6px; align-items: center; position: relative; }
 
@@ -929,8 +1006,13 @@ style.textContent = `
     cursor: pointer;
     opacity: 0.85;
     white-space: nowrap;
+    transition: all 0.15s ease;
   }
-  .pill-selector:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
+  .pill-selector:hover {
+    background: var(--vscode-toolbar-hoverBackground);
+    opacity: 1;
+    border-color: var(--vscode-focusBorder);
+  }
 
   .send-arrow-btn {
     background: #c15c25;
@@ -960,9 +1042,9 @@ style.textContent = `
     background: var(--vscode-editorWidget-background, #252526);
     border: 1px solid var(--vscode-widget-border, #454545);
     border-radius: 8px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45);
     min-width: 170px;
-    max-height: 260px;
+    max-height: 280px;
     overflow-y: auto;
     padding: 6px;
   }
@@ -977,7 +1059,14 @@ style.textContent = `
   .footer-toggle { font-size: 11px; opacity: 0.8; padding: 6px 8px; color: var(--vscode-textLink-foreground); }
   .raw-models-section { margin-top: 6px; border-top: 1px solid var(--vscode-widget-border); padding-top: 6px; }
 
-  .slash-popover { left: 0; right: auto; min-width: 180px; }
+  /* Slash Popover Layout */
+  .slash-popover { left: 0; right: auto; min-width: 280px; max-height: 320px; }
+  #slash-search { padding: 6px 8px; font-size: 11px; margin-bottom: 6px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px; width: 100%; }
+  .slash-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .slash-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 6px 10px; border-radius: 4px; }
+  .slash-cmd { font-family: var(--vscode-editor-font-family, monospace); font-weight: 600; color: #4ec9b0; font-size: 12px; white-space: nowrap; }
+  .slash-desc { font-size: 11px; opacity: 0.75; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   #model-search { padding: 4px 8px; font-size: 11px; margin-bottom: 4px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px; width: 100%; }
   .popover-list { max-height: 140px; overflow-y: auto; }
 
