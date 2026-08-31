@@ -15,8 +15,11 @@ const executablePath = local && existsSync(local) ? local : undefined;
 // tests to a single CJS bundle first ('vscode' stays external and is provided
 // by the extension host at runtime). Output dir is gitignored.
 await build({
-  entryPoints: ['test/integration/extension.test.ts'],
-  outfile: '.vscode-test/integration/extension.test.js',
+  entryPoints: [
+    'test/integration/extension.test.ts',
+    'test/integration/acpChat.test.ts',
+  ],
+  outdir: '.vscode-test/integration',
   bundle: true,
   platform: 'node',
   target: 'es2022',
