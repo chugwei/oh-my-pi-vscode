@@ -62,8 +62,8 @@ app.innerHTML = `
           <span class="cwd-icon">📁</span>
           <span id="welcome-cwd-text">--</span>
         </div>
+      </div>
     </div>
-
     <!-- Bottom Input Container (Exact Claude Code Box) -->
     <div class="input-area">
       <!-- Attachment Pills -->
@@ -631,7 +631,7 @@ style.textContent = `
   .history-title { font-size: 12px; font-weight: 500; }
   .history-date { font-size: 10px; opacity: 0.7; }
 
-  .messages-flow { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+  .messages-flow { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
   .welcome-view { margin: auto; text-align: center; color: var(--vscode-descriptionForeground); display: flex; flex-direction: column; align-items: center; }
   .welcome-view h2 { margin: 8px 0 4px; color: var(--vscode-editor-foreground); }
   .welcome-cwd-pill { margin-top: 10px; font-size: 11px; padding: 4px 10px; border-radius: 12px; background: var(--vscode-input-background, #252526); border: 1px solid var(--vscode-widget-border, #3c3c3c); max-width: 90%; word-break: break-all; color: var(--vscode-descriptionForeground); }
@@ -653,12 +653,10 @@ style.textContent = `
   .permission-card { border: 1px solid var(--vscode-inputValidation-warningBorder); background: var(--vscode-inputValidation-warningBackground); border-radius: 6px; padding: 8px 10px; margin: 8px 0; font-size: 12px; }
   .perm-header { font-weight: bold; margin-bottom: 4px; }
   .perm-input { font-size: 11px; margin: 4px 0; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 3px; }
-  .perm-actions { display: flex; gap: 6px; margin-top: 6px; }
-  .perm-btn { padding: 3px 8px; font-size: 11px; border-radius: 3px; border: none; cursor: pointer; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+  /* Input Area (Claude Code 1:1 Box) */
+  .input-area { flex-shrink: 0; padding: 8px 10px; background: var(--vscode-editor-background); border-top: 1px solid var(--vscode-widget-border); }
   .perm-btn.opt-allow_once, .perm-btn.opt-allow_always { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 
-  /* Input Area (Claude Code 1:1 Box) */
-  .input-area { padding: 8px 10px; background: var(--vscode-editor-background); }
   .attachment-pills { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
   .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 6px; border-radius: 12px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   .pill-remove { background: transparent; border: none; color: inherit; cursor: pointer; padding: 0 2px; }
