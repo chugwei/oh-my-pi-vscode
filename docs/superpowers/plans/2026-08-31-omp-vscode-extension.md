@@ -1059,7 +1059,7 @@ export class OmpViewProvider implements vscode.WebviewViewProvider {
   }
 
   reveal(): void {
-    this.view?.show?.(true);
+    void vscode.commands.executeCommand(`${OmpViewProvider.viewId}.focus`);
   }
 
   private onMessage(m: HostMessage): void {
