@@ -1343,9 +1343,13 @@ declare function acquireVsCodeApi(): {
 
 const vscode = acquireVsCodeApi();
 
-const CHORD_BYTES: Record<string, string> = {
-  'ctrl+p': '\x10',
-};
+function chordToBytes(chord: string): string | null {
+  const m = /^ctrl\+([a-z])$/i.exec(chord);
+  if (!m) {
+    return null;
+  }
+  return String.fromCharCode(m[1].toUpperCase().charCodeAt(0) - 64);
+}
 
 interface Tab {
   info: SessionInfo;
@@ -1429,12 +1433,28 @@ function renderTabs(): void {
   for (const t of tabs.values()) {
     const b = document.createElement('button');
     b.className = 'tab' + (t.info.id === activeId ? ' active' : '');
-    b.textContent = label(t.info);
     b.title = t.info.exited ? 'Restart' : 'Switch';
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'tab-label';
+    labelSpan.textContent = label(t.info);
+    b.appendChild(labelSpan);
+    if (!t.info.exited) {
+      const x = document.createElement('span');
+      x.className = 'tab-close';
+      x.textContent = '×';
+      x.title = 'Close session';
+      x.onclick = (ev) => {
+        ev.stopPropagation();
+        post({ type: 'close', sessionId: t.info.id });
+      };
+      b.appendChild(x);
+    }
     b.onclick = () => {
       if (t.info.exited) {
         post({ type: 'restart', sessionId: t.info.id });
       } else {
+        activeId = t.info.id;
+        renderTabs();
         post({ type: 'switch', sessionId: t.info.id });
       }
     };
@@ -1514,7 +1534,7 @@ window.addEventListener('message', (e: MessageEvent<WebviewMessage>) => {
       break;
     case 'key': {
       // host forwarded a stolen chord back into the terminal
-      const bytes = CHORD_BYTES[m.chord];
+      const bytes = chordToBytes(m.chord);
       if (bytes && activeId) {
         post({ type: 'input', sessionId: activeId, data: bytes });
       }
@@ -1569,7 +1589,10 @@ style.textContent = `
   body { color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); }
   #app { display: flex; flex-direction: column; }
   .tabbar { display: flex; gap: 2px; padding: 2px 4px; align-items: center; flex-wrap: wrap; }
-  .tabbar .tab { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab { display: inline-flex; align-items: center; gap: 4px; }
+  .tab-label { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab-close { padding: 0 2px; opacity: 0.7; }
+  .tab-close:hover { opacity: 1; color: var(--vscode-errorForeground); }
   .tab.active { border-bottom: 1px solid var(--vscode-focusBorder); }
   button { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; padding: 2px 8px; cursor: pointer; font-size: 11px; }
   button:hover { filter: brightness(1.15); }
