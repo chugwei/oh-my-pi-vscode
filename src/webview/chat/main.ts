@@ -77,8 +77,15 @@ app.innerHTML = `
     <div id="messages-flow" class="messages-flow">
       <div id="welcome-view" class="welcome-view">
         <div class="welcome-logo">
-          <svg width="44" height="44" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M4 5h16v2.5h-4.8V19h-2.4V7.5H9.2V19H6.8V7.5H4V5z"/>
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="omp-tile" x1="0" y1="0" x2="0" y2="24" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#8B5CF6"/>
+                <stop offset="1" stop-color="#C026D3"/>
+              </linearGradient>
+            </defs>
+            <rect width="24" height="24" rx="5.5" fill="url(#omp-tile)"/>
+            <path d="M4 5h16v2.5h-4.8V19h-2.4V7.5H9.2V19H6.8V7.5H4V5z" fill="#FFFFFF"/>
           </svg>
         </div>
         <h2>Oh My Pi</h2>

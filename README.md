@@ -5,7 +5,7 @@
 **Powering seamless Oh My Pi (omp) AI Agent interactions directly inside your VS Code workspace.**
 
 [![VS Code](https://img.shields.io/badge/VS%20Code-v1.94.0+-007ACC.svg?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com/)
-[![Version](https://img.shields.io/badge/version-0.2.7-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-0.2.8-blue.svg)](package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg?logo=typescript&logoColor=white)](tsconfig.json)
