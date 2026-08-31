@@ -412,6 +412,11 @@ test('settings override that does not exist throws', () => {
   assert.throws(() => resolveOmpExecutable('D:\\missing.exe', deps([])), /executablePath/);
 });
 
+test('default sentinel "omp" falls through to autodetect/PATH', () => {
+  const p = resolveOmpExecutable('omp', deps([]));
+  assert.equal(p, 'omp');
+});
+
 test('falls back to %LOCALAPPDATA% detection on win32', () => {
   const p = resolveOmpExecutable(undefined, deps(['C:\\Users\\x\\AppData\\Local\\omp\\omp.exe']));
   assert.equal(p, 'C:\\Users\\x\\AppData\\Local\\omp\\omp.exe');
@@ -449,12 +454,13 @@ export interface ExecutableDeps {
  * -> bare "omp" (delegated to PATH at spawn time; a PATH miss surfaces as spawn error).
  */
 export function resolveOmpExecutable(configured: string | undefined, deps: ExecutableDeps): string {
-  if (configured && configured.trim()) {
-    if (deps.existsSync(configured)) {
-      return configured;
+  const configuredPath = configured?.trim();
+  if (configuredPath && configuredPath !== 'omp') {
+    if (deps.existsSync(configuredPath)) {
+      return configuredPath;
     }
     throw new Error(
-      `omp.executablePath points to a file that does not exist: ${configured}`,
+      `omp.executablePath points to a file that does not exist: ${configuredPath}`,
     );
   }
   if (deps.platform === 'win32' && deps.env.LOCALAPPDATA) {
@@ -517,6 +523,13 @@ test('size reports byte length', () => {
   r.push('hello');
   assert.equal(r.size(), 5);
 });
+
+test('empty push does not evict retained data', () => {
+  const r = new RingBuffer(3);
+  r.push('0123456789');
+  r.push('');
+  assert.equal(r.data(), '0123456789');
+});
 ```
 
 - [ ] **Step 2: 运行确认失败**
@@ -535,6 +548,7 @@ export class RingBuffer {
   constructor(private readonly maxBytes: number) {}
 
   push(s: string): void {
+    if (!s) return;
     this.chunks.push(s);
     this.total += s.length;
     while (this.total > this.maxBytes && this.chunks.length > 1) {

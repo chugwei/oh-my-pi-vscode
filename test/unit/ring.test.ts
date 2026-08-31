@@ -25,3 +25,10 @@ test('size reports byte length', () => {
   r.push('hello');
   assert.equal(r.size(), 5);
 });
+
+test('empty push does not evict retained data', () => {
+  const r = new RingBuffer(3);
+  r.push('0123456789');
+  r.push('');
+  assert.equal(r.data(), '0123456789');
+});

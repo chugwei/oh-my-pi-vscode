@@ -19,6 +19,11 @@ test('settings override that does not exist throws', () => {
   assert.throws(() => resolveOmpExecutable('D:\\missing.exe', deps([])), /executablePath/);
 });
 
+test('default sentinel "omp" falls through to autodetect/PATH', () => {
+  const p = resolveOmpExecutable('omp', deps([]));
+  assert.equal(p, 'omp');
+});
+
 test('falls back to %LOCALAPPDATA% detection on win32', () => {
   const p = resolveOmpExecutable(undefined, deps(['C:\\Users\\x\\AppData\\Local\\omp\\omp.exe']));
   assert.equal(p, 'C:\\Users\\x\\AppData\\Local\\omp\\omp.exe');

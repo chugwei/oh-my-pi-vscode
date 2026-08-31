@@ -11,12 +11,13 @@ export interface ExecutableDeps {
  * -> bare "omp" (delegated to PATH at spawn time; a PATH miss surfaces as spawn error).
  */
 export function resolveOmpExecutable(configured: string | undefined, deps: ExecutableDeps): string {
-  if (configured && configured.trim()) {
-    if (deps.existsSync(configured)) {
-      return configured;
+  const configuredPath = configured?.trim();
+  if (configuredPath && configuredPath !== 'omp') {
+    if (deps.existsSync(configuredPath)) {
+      return configuredPath;
     }
     throw new Error(
-      `omp.executablePath points to a file that does not exist: ${configured}`,
+      `omp.executablePath points to a file that does not exist: ${configuredPath}`,
     );
   }
   if (deps.platform === 'win32' && deps.env.LOCALAPPDATA) {

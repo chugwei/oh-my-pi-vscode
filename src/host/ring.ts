@@ -6,6 +6,7 @@ export class RingBuffer {
   constructor(private readonly maxBytes: number) {}
 
   push(s: string): void {
+    if (!s) return;
     this.chunks.push(s);
     this.total += s.length;
     while (this.total > this.maxBytes && this.chunks.length > 1) {
