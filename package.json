@@ -5,6 +5,10 @@
   "version": "0.2.7",
   "publisher": "omp-dev",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chugwei/oh-my-pi-vscode.git"
+  },
   "type": "commonjs",
   "engines": {
     "vscode": "^1.94.0"
