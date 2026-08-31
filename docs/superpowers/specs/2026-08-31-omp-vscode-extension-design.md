@@ -89,8 +89,9 @@ webview → host：
 | `input` | `sessionId, data: string` | 终端按键输入 |
 | `resize` | `sessionId, cols, rows` | 尺寸变化 |
 | `close` | `sessionId` | 关闭某会话 |
-| `switch` | `sessionId` | 激活某标签 |
-| `restart` | `sessionId` | 重启 exited 会话 |
+| `restart` | `sessionId` | 重启 exited 会话（沿用原启动参数） |
+| `focus` | `value: boolean` | webview 键盘焦点变化，host 据此维护 `ompSidebarFocused` 上下文键 |
+| `openSettings` | — | 从错误态打开设置（定位 `omp.executablePath`） |
 
 host → webview：
 
@@ -100,7 +101,7 @@ host → webview：
 | `output` | `sessionId, data` | 终端输出增量 |
 | `exit` | `sessionId, code` | 进程退出 |
 | `created` | `session` | 新会话已建立 |
-| `error` | `message` | 宿主侧错误（omp 未找到等） |
+| `config` | `fontFamily, scrollback, restartHint` | webview 就绪后下发设置（字体/回滚等） |
 
 ### 4.3 Webview 资源
 
